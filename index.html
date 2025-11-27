@@ -34,7 +34,7 @@ function login(){
   }
 
   // Endpoint login ini akan dikendalikan oleh server.js yang sudah di-update dengan Firebase
-  fetch("http://localhost:3001/login", {
+  fetch("https://admin-garaj-1.onrender.com/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password })
