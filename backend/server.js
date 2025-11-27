@@ -12,13 +12,13 @@ app.use(cors()); // ✅ CORS middleware diaktifkan
 // ===============================================
 // FIREBASE CONFIGURATION 
 // ===============================================
-const serviceAccount = require("./istem-garaj-firebase-adminsdk-fbsvc-3eb0477ea0.json");
+// Baca rentetan JSON daripada Pemboleh Ubah Persekitaran
+const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+const serviceAccount = JSON.parse(serviceAccountJson);
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://istem-garaj-default-rtdb.asia-southeast1.firebasedatabase.app/"
+  credential: admin.credential.cert(serviceAccount)
 });
-
 const db = admin.database();
 const bookingsRef = db.ref('bookings');
 const usersRef = db.ref('users'); 
