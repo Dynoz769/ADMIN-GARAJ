@@ -1,12 +1,14 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors');
+const cors = require('cors'); // Menggunakan cors() tanpa konfigurasi adalah yang paling selamat untuk API umum
 const admin = require('firebase-admin');
 
 const app = express();
 const port = process.env.PORT || 3001; 
 
+// Konfigurasi Middleware
 app.use(bodyParser.json());
+// ✅ Menggunakan CORS lalai (membenarkan semua origin, termasuk GitHub Pages anda)
 app.use(cors()); 
 
 // ===============================================
@@ -140,7 +142,7 @@ async function getAvailableGarage(startMonthStr, endMonthStr) {
 }
 
 // ===============================================
-// ✅ ROOT/HEALTH CHECK ENDPOINT (PENAMBAHAN BARU UNTUK MENGELAKKAN 'CANNOT GET /')
+// ✅ ROOT/HEALTH CHECK ENDPOINT 
 // ===============================================
 app.get('/', (req, res) => {
     res.status(200).json({
