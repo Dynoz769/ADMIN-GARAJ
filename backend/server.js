@@ -4,29 +4,31 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001; // Guna process.env.PORT untuk Render
 
 app.use(bodyParser.json());
 app.use(cors()); // ✅ CORS middleware diaktifkan
 
 // ===============================================
-// FIREBASE CONFIGURATION (Diubahsuai untuk Render ENV Variables)
+// FIREBASE CONFIGURATION (Diubahsuai & Diperkukuh untuk Render ENV Variables)
 // ===============================================
 
 // 1. Ambil Kunci Peribadi satu baris dari Environment Variable
 const privateKeyOneLine = process.env.FIREBASE_PRIVATE_KEY;
 
-// 2. TUKAR KEMBALI rentetan '\n' kepada aksara baris baharu sebenar.
+// 2. TUKAR KEMBALI rentetan '\n' kepada aksara baris baharu sebenar,
+//    dan tambahkan .trim() untuk membuang sebarang ruang putih yang memecahkan format PEM.
 const privateKeyFormatted = privateKeyOneLine 
     ? privateKeyOneLine.replace(/\\n/g, '\n').trim() 
     : '';
+
 // 3. Bina objek Service Account menggunakan Environment Variables
 const serviceAccount = {
   type: "service_account",
   project_id: process.env.FIREBASE_PROJECT_ID,
-  // Private Key ID dan Client ID boleh dikekalkan di sini kerana ia kurang sensitif
+  // Private Key ID dan Client ID boleh dikekalkan di sini 
   private_key_id: "ea0c375eecfd1049ab31d4f99f586a88c3762299", 
-  private_key: privateKeyFormatted, // Gunakan kunci yang telah diformatkan
+  private_key: privateKeyFormatted, // Gunakan kunci yang telah diformatkan & ditrim
   client_email: process.env.FIREBASE_CLIENT_EMAIL,
   client_id: "113891660944890863187",
   auth_uri: "https://accounts.google.com/o/oauth2/auth",
@@ -36,17 +38,22 @@ const serviceAccount = {
   universe_domain: "googleapis.com"
 };
 
-// Pastikan semua Environment Variables telah ditetapkan sebelum initialize Firebase
+// Semak konfigurasi sebelum initialize Firebase
 if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKeyFormatted) {
-    console.error("RALAT KONFIGURASI: Pemboleh ubah persekitaran Firebase tidak lengkap.");
-    // ... (kod selebihnya)
-    // Anda mungkin mahu keluar dari proses jika konfigurasi gagal
-    // process.exit(1); 
+    console.error("RALAT KONFIGURASI: Pemboleh ubah persekitaran Firebase tidak lengkap atau tidak sah.");
+    // Mematikan proses jika konfigurasi asas gagal
+    process.exit(1); 
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+} catch (error) {
+    console.error("RALAT FIREBASE INITIATION:", error.message);
+    process.exit(1);
+}
+
 
 const db = admin.database();
 const bookingsRef = db.ref('bookings');
@@ -385,7 +392,7 @@ app.post('/bookings/:id/garaj', async (req, res) => {
 		
 		const available = await getAvailableGarage(booking.startMonth, booking.endMonth);
 		
-		if (!available.includes(garaj)) {
+		if (!available.includes(parseInt(garaj))) {
 			return res.status(400).json({ success: false, message: `Garaj ${garaj} telah ditempah dalam tempoh ${booking.startMonth} - ${booking.endMonth}.`, availableGaraj: available });
 		}
 
@@ -592,5 +599,5 @@ setInterval(checkQueue, 30000);
 // START SERVER
 // ===============================================
 app.listen(port, () => {
-	console.log(`Server berjalan di http://localhost:${port}`);
+	console.log(`Server berjalan di port ${port}`);
 });
