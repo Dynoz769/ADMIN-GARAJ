@@ -4,44 +4,39 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 
 const app = express();
-const port = process.env.PORT || 3001; // Guna process.env.PORT untuk Render
+const port = process.env.PORT || 3001; 
 
 app.use(bodyParser.json());
-app.use(cors()); // ✅ CORS middleware diaktifkan
+app.use(cors()); 
 
 // ===============================================
-// FIREBASE CONFIGURATION (Diubahsuai & Diperkukuh untuk Render ENV Variables)
+// FIREBASE CONFIGURATION (MENGGUNAKAN BASE64 & JSON DECODING)
 // ===============================================
 
-// 1. Ambil Kunci Peribadi satu baris dari Environment Variable
-const privateKeyOneLine = process.env.FIREBASE_PRIVATE_KEY;
+// Ambil kunci BASE64 yang MENGANDUNGI KESELURUHAN JSON file, disimpan sebagai FIREBASE_PRIVATE_KEY
+const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
 
-// 2. TUKAR KEMBALI rentetan '\n' kepada aksara baris baharu sebenar,
-//    dan tambahkan .trim() untuk membuang sebarang ruang putih yang memecahkan format PEM.
-const privateKeyFormatted = privateKeyOneLine 
-    ? privateKeyOneLine.replace(/\\n/g, '\n').trim() 
-    : '';
+let serviceAccount = null;
 
-// 3. Bina objek Service Account menggunakan Environment Variables
-const serviceAccount = {
-  type: "service_account",
-  project_id: process.env.FIREBASE_PROJECT_ID,
-  // Private Key ID dan Client ID boleh dikekalkan di sini 
-  private_key_id: "ea0c375eecfd1049ab31d4f99f586a88c3762299", 
-  private_key: privateKeyFormatted, // Gunakan kunci yang telah diformatkan & ditrim
-  client_email: process.env.FIREBASE_CLIENT_EMAIL,
-  client_id: "113891660944890863187",
-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
-  token_uri: "https://oauth2.googleapis.com/token",
-  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40istem-garaj.iam.gserviceaccount.com",
-  universe_domain: "googleapis.com"
-};
+if (serviceAccountBase64) {
+    try {
+        // 1. Nyahkod dari Base64 kembali ke rentetan JSON
+        // Nota: Kita menggunakan Buffer.from() yang tersedia dalam Node.js
+        const jsonString = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
+        
+        // 2. Parse rentetan JSON kepada objek JavaScript
+        serviceAccount = JSON.parse(jsonString);
+
+    } catch (e) {
+        console.error("RALAT: Gagal menyahkod Base64 atau parse JSON:", e.message);
+        process.exit(1);
+    }
+}
 
 // Semak konfigurasi sebelum initialize Firebase
-if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKeyFormatted) {
+if (!serviceAccount || !serviceAccount.project_id || !serviceAccount.private_key) {
     console.error("RALAT KONFIGURASI: Pemboleh ubah persekitaran Firebase tidak lengkap atau tidak sah.");
-    // Mematikan proses jika konfigurasi asas gagal
+    // Mesej ini akan muncul jika FIREBASE_PRIVATE_KEY ENV variable kosong atau Base64 tidak sah
     process.exit(1); 
 }
 
@@ -304,7 +299,7 @@ app.get('/user-bookings', async (req, res) => {
 	}
 });
 
-// ✅ PENAMBAHAN PENTING: Laluan untuk user.html mendapatkan senarai tempahan
+// ✅ Laluan untuk user.html mendapatkan senarai tempahan
 // GET /bookings/history/:username	
 app.get('/bookings/history/:username', async (req, res) => {
 	const { username } = req.params;
@@ -333,7 +328,11 @@ app.post('/bookings', async (req, res) => {
 	const durationMonths = parseInt(duration);
 	
 	try {
+		// Asumsi startMonth dalam format YYYY-MM
 		const startDate = parseDMY(`01/${startMonth.substring(5, 7)}/${startMonth.substring(0, 4)}`);
+		
+		// Menentukan endMonth: Tambah tempoh (durationMonths) ke bulan mula (startDate.getMonth()),
+		// dan dapatkan hari terakhir bulan tersebut (hari 0 bulan seterusnya)
 		const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + durationMonths, 0);	
 		
 		const bookingData = {
@@ -468,18 +467,17 @@ app.post('/bookings/:id/extend', async (req, res) => {
 			return res.status(400).json({ success: false, message: 'Hanya tempahan yang diluluskan dan ditetapkan garaj boleh dilanjutkan.' });
 		}
 		
+		// Dapatkan tarikh tamat semasa
 		const currentEndDate = parseDMY(booking.endMonth);
 		
-		const newEndDate = new Date(currentEndDate.getFullYear(), currentEndDate.getMonth() + extraMonths + 1, 0);	
+		// Tarikh mula semakan adalah bulan selepas tarikh tamat semasa
+		const checkStartDate = new Date(currentEndDate.getFullYear(), currentEndDate.getMonth() + 1, 1);
+		
+		// Tarikh tamat baru adalah selepas tempoh lanjutan
+		const newEndDate = new Date(checkStartDate.getFullYear(), checkStartDate.getMonth() + extraMonths, 0);	
 		const newEndDateStr = formatDateDMY(newEndDate);
 		
-		const tempBookingForCheck = {
-			id: 'temp',
-			garaj: booking.garaj,
-			startMonth: booking.endMonth,	
-			endMonth: newEndDateStr
-		};
-
+		// Semak ketersediaan garaj yang SAMA untuk tempoh lanjutan
 		const allBookingsSnapshot = await bookingsRef.once('value');
 		const allBookings = snapshotToArray(allBookingsSnapshot).filter(b => b.id !== id && b.status === 'Approved');
 		
@@ -487,20 +485,26 @@ app.post('/bookings/:id/extend', async (req, res) => {
 			 if (!b.garaj || b.garaj !== booking.garaj) return false;
 			 
 			 try {
+				// Tarikh tempahan sedia ada yang lain
 				const bStart = parseDMY(b.startMonth);
 				const bEnd = parseDMY(b.endMonth);
 				
-				const checkStart = parseDMY(tempBookingForCheck.startMonth);
-				const checkEnd = parseDMY(tempBookingForCheck.endMonth);
-				
+				// Tarikh semakan tempoh lanjutan
+				const checkStart = parseDMY(formatDateDMY(checkStartDate)); // Bulan bermula semakan
+				const checkEnd = parseDMY(newEndDateStr); // Bulan tamat baru
+
+				// Dapatkan hari terakhir bulan untuk perbandingan yang adil
 				const bCheckStart = new Date(bStart.getFullYear(), bStart.getMonth() + 1, 0);	
 				const bCheckEnd = new Date(bEnd.getFullYear(), bEnd.getMonth() + 1, 0);
-
-				if (checkStart <= bCheckEnd && checkEnd >= bCheckStart) {
+				const checkEndCompare = new Date(checkEnd.getFullYear(), checkEnd.getMonth() + 1, 0);
+				
+				// Semakan bertindih (overlap check)
+				if (checkStart <= bCheckEnd && checkEndCompare >= bCheckStart) {
 					return true;
 				}
 				return false;
 			 } catch (e) {
+				 console.error('Error in overlap check during extend:', e);
 				 return false;
 			 }
 		});
@@ -572,6 +576,7 @@ async function checkQueue() {
 		const snapshot = await bookingsRef.orderByChild('status').equalTo('Pending').once('value');
 		let pendingBookings = snapshotToArray(snapshot);
 		
+		// Susun mengikut masa tempahan (atau ID) untuk FIFO (First In, First Out)
 		pendingBookings.sort((a, b) => a.id.localeCompare(b.id));	
 		
 		for (const b of pendingBookings) {
