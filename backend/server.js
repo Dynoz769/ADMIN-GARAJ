@@ -15,22 +15,26 @@ app.use(cors());
 
 // Ambil kunci BASE64 yang MENGANDUNGI KESELURUHAN JSON file, disimpan sebagai FIREBASE_PRIVATE_KEY
 const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
-const FIREBASE_DATABASE_URL = 'https://istem-garaj-default-rtdb.firebaseio.com'; // <--- URL PANGKALAN DATA ANDA
+// URL PANGKALAN DATA (WAJIB DITETAPKAN SECARA MANUAL)
+const FIREBASE_DATABASE_URL = 'https://istem-garaj-default-rtdb.firebaseio.com'; 
 
 let serviceAccount = null;
 
 if (serviceAccountBase64) {
     try {
+        // Nyahkod dari Base64 kembali ke rentetan JSON
         const jsonString = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
+        // Parse rentetan JSON kepada objek JavaScript
         serviceAccount = JSON.parse(jsonString);
 
     } catch (e) {
         console.error("RALAT: Gagal menyahkod Base64 atau parse JSON:", e.message);
-        process.exit(1);
+        // Hentikan proses jika Base64 tidak boleh dibaca atau JSON rosak
+        process.exit(1); 
     }
 }
 
-// Semak konfigurasi sebelum initialize Firebase
+// Semak konfigurasi asas sebelum initialize Firebase
 if (!serviceAccount || !serviceAccount.project_id || !serviceAccount.private_key) {
     console.error("RALAT KONFIGURASI: Pemboleh ubah persekitaran Firebase tidak lengkap atau tidak sah.");
     process.exit(1); 
@@ -39,7 +43,7 @@ if (!serviceAccount || !serviceAccount.project_id || !serviceAccount.private_key
 try {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      databaseURL: FIREBASE_DATABASE_URL // <--- PENAMBAHAN WAJIB INI
+      databaseURL: FIREBASE_DATABASE_URL // Penambahan ini menyelesaikan ralat URL
     });
 } catch (error) {
     console.error("RALAT FIREBASE INITIATION:", error.message);
@@ -594,7 +598,7 @@ async function checkQueue() {
 		console.error("Ralat dalam checkQueue:", error);
 	}
 }
-// Jalankan semakan queue setiap 30 saat
+// Jalankan semakan queue setiap 30 saat untuk menangani queue secara automatik
 setInterval(checkQueue, 30000);
 
 // ===============================================
