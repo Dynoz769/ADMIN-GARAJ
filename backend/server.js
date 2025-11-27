@@ -140,6 +140,16 @@ async function getAvailableGarage(startMonthStr, endMonthStr) {
 }
 
 // ===============================================
+// ✅ ROOT/HEALTH CHECK ENDPOINT (PENAMBAHAN BARU UNTUK MENGELAKKAN 'CANNOT GET /')
+// ===============================================
+app.get('/', (req, res) => {
+    res.status(200).json({
+        message: "Selamat datang ke API Pengurusan Garaj! API ini berfungsi dengan baik.",
+        endpoints: ["/login", "/bookings", "/analytics", "/garaj-status", "/export/csv"]
+    });
+});
+
+// ===============================================
 // ✅ ANALYTICS ENDPOINT	
 // ===============================================
 app.get('/analytics', async (req, res) => {
@@ -166,7 +176,7 @@ app.get('/analytics', async (req, res) => {
 				try {
 					const bookingDate = parseDMY(b.startMonth);
 					return bookingDate.getMonth() === date.getMonth() &&	
-						   bookingDate.getFullYear() === date.getFullYear();
+						   bookingDate.getFullYear() === date.getFullYear();
 				} catch(e) {
 					return false;
 				}
@@ -484,7 +494,7 @@ app.post('/bookings/:id/extend', async (req, res) => {
 		
 		const isOverlap = allBookings.some(b => {
 			 if (!b.garaj || b.garaj !== booking.garaj) return false;
-			 
+			 
 			 try {
 				// Tarikh tempahan sedia ada yang lain
 				const bStart = parseDMY(b.startMonth);
