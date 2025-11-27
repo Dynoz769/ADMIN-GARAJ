@@ -10,21 +10,18 @@ app.use(bodyParser.json());
 app.use(cors()); 
 
 // ===============================================
-// FIREBASE CONFIGURATION (MENGGUNAKAN BASE64 & JSON DECODING)
+// FIREBASE CONFIGURATION (BASE64 DECODING DAN URL RTDB)
 // ===============================================
 
 // Ambil kunci BASE64 yang MENGANDUNGI KESELURUHAN JSON file, disimpan sebagai FIREBASE_PRIVATE_KEY
 const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
+const FIREBASE_DATABASE_URL = 'https://istem-garaj-default-rtdb.firebaseio.com'; // <--- URL PANGKALAN DATA ANDA
 
 let serviceAccount = null;
 
 if (serviceAccountBase64) {
     try {
-        // 1. Nyahkod dari Base64 kembali ke rentetan JSON
-        // Nota: Kita menggunakan Buffer.from() yang tersedia dalam Node.js
         const jsonString = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
-        
-        // 2. Parse rentetan JSON kepada objek JavaScript
         serviceAccount = JSON.parse(jsonString);
 
     } catch (e) {
@@ -36,13 +33,13 @@ if (serviceAccountBase64) {
 // Semak konfigurasi sebelum initialize Firebase
 if (!serviceAccount || !serviceAccount.project_id || !serviceAccount.private_key) {
     console.error("RALAT KONFIGURASI: Pemboleh ubah persekitaran Firebase tidak lengkap atau tidak sah.");
-    // Mesej ini akan muncul jika FIREBASE_PRIVATE_KEY ENV variable kosong atau Base64 tidak sah
     process.exit(1); 
 }
 
 try {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: FIREBASE_DATABASE_URL // <--- PENAMBAHAN WAJIB INI
     });
 } catch (error) {
     console.error("RALAT FIREBASE INITIATION:", error.message);
