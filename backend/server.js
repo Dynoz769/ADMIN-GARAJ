@@ -17,8 +17,9 @@ app.use(cors()); // ✅ CORS middleware diaktifkan
 const privateKeyOneLine = process.env.FIREBASE_PRIVATE_KEY;
 
 // 2. TUKAR KEMBALI rentetan '\n' kepada aksara baris baharu sebenar.
-const privateKeyFormatted = privateKeyOneLine ? privateKeyOneLine.replace(/\\n/g, '\n') : '';
-
+const privateKeyFormatted = privateKeyOneLine 
+    ? privateKeyOneLine.replace(/\\n/g, '\n').trim() 
+    : '';
 // 3. Bina objek Service Account menggunakan Environment Variables
 const serviceAccount = {
   type: "service_account",
@@ -38,6 +39,7 @@ const serviceAccount = {
 // Pastikan semua Environment Variables telah ditetapkan sebelum initialize Firebase
 if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKeyFormatted) {
     console.error("RALAT KONFIGURASI: Pemboleh ubah persekitaran Firebase tidak lengkap.");
+    // ... (kod selebihnya)
     // Anda mungkin mahu keluar dari proses jika konfigurasi gagal
     // process.exit(1); 
 }
