@@ -18,7 +18,7 @@ app.use(cors());
 // Ambil kunci BASE64 yang MENGANDUNGI KESELURUHAN JSON file, disimpan sebagai FIREBASE_PRIVATE_KEY
 const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
 // URL PANGKALAN DATA (WAJIB DITETAPKAN SECARA MANUAL)
-const FIREBASE_DATABASE_URL = 'https://istem-garaj-default-rtdb.firebaseio.com'; 
+const FIREBASE_DATABASE_URL = 'https://istem-garaj-default-rtdb.asia-southeast1.firebasedatabase.app'; 
 
 let serviceAccount = null;
 
