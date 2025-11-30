@@ -249,10 +249,10 @@ h3::after {
 .toggle input { accent-color: var(--color-accent); width: 18px; height: 18px; }
 
 button.ghost {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #e2e8f0;
-  box-shadow: none;
+  background: rgba(111, 124, 255, 0.16);
+  border: 1px solid rgba(111, 124, 255, 0.45);
+  color: #e0e7ff;
+  box-shadow: var(--shadow-sm);
   padding: 0.6rem 1.1rem;
 }
 
@@ -331,7 +331,7 @@ button {
   cursor: pointer;
   font-weight: 600;
   font-size: 0.9rem;
-  color: white;
+  color: #0b1021;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow-sm);
   margin: 0.25rem;
@@ -339,6 +339,8 @@ button {
   overflow: hidden;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #8ba3ff, #0ac7a7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 button::before {
@@ -369,34 +371,41 @@ button:active {
   box-shadow: var(--shadow-sm);
 }
 
-button.approve { 
+button.approve {
   background: linear-gradient(135deg, var(--color-success) 0%, #45A049 100%);
+  color: #f8fafc;
 }
 
 button.reject {
   background: linear-gradient(135deg, var(--color-danger) 0%, #E53935 100%);
+  color: #f8fafc;
 }
 
 button.danger {
   background: linear-gradient(135deg, #C62828 0%, #B71C1C 100%);
+  color: #f8fafc;
 }
 
 button.delete, button.logout {
   background: linear-gradient(135deg, var(--color-info) 0%, #78909C 100%);
+  color: #0b1021;
 }
 
-button.book { 
+button.book {
   background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-dark) 100%);
   font-size: 1rem;
   padding: 1rem 2rem;
+  color: #0b1021;
 }
 
-button.extend { 
+button.extend {
   background: linear-gradient(135deg, var(--color-warning) 0%, #FB8C00 100%);
+  color: #0b1021;
 }
 
 button.cancel-btn {
   background: linear-gradient(135deg, #FF6F61 0%, #E85D4F 100%);
+  color: #f8fafc;
 }
 
 /* ===== GARAGE VISUAL - MODERN CARDS ===== */
@@ -425,9 +434,9 @@ button.cancel-btn {
 }
 
 .zone-pill {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.35);
   color: #e2e8f0;
-  border: 1px solid transparent;
+  border: 1px solid rgba(99, 102, 241, 0.5);
   padding: 0.4rem 0.9rem;
   border-radius: 999px;
   box-shadow: var(--shadow-sm);
@@ -460,6 +469,64 @@ button.cancel-btn {
   border: 1px dashed rgba(255, 255, 255, 0.06);
   pointer-events: none;
 }
+
+/* ===== FILTER & SEARCH ===== */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.75rem 0 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.chip-group {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  background: rgba(10, 199, 167, 0.16);
+  color: #dbeafe;
+  border: 1px solid rgba(10, 199, 167, 0.45);
+  padding: 0.45rem 0.85rem;
+  border-radius: 12px;
+  text-transform: none;
+  letter-spacing: 0.3px;
+  box-shadow: none;
+}
+
+.filter-chip.active {
+  background: linear-gradient(135deg, rgba(139, 163, 255, 0.35), rgba(10, 199, 167, 0.45));
+  border-color: rgba(139, 163, 255, 0.75);
+  color: #0b1021;
+  box-shadow: var(--shadow-sm);
+}
+
+.search-box {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.search-box input {
+  width: 100%;
+  max-width: 340px;
+  padding: 0.65rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  box-shadow: var(--shadow-sm);
+}
+
+.search-box input::placeholder { color: rgba(226, 232, 240, 0.8); }
 
 .zone-header {
   display: flex;
@@ -819,6 +886,16 @@ select {
   .garaj-container {
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 1rem;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-box {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .garaj {

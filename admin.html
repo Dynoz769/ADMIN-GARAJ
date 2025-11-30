@@ -13,14 +13,14 @@
             <div>
                 <p class="eyebrow">Kontrol garaj sepintas lalu</p>
                 <h1>Jejak status garaj secara real-time</h1>
-                <p class="lede">Pilih zon untuk melihat 22 lot setiap satu. Semua tempahan aktif akan terus dipaparkan dengan butiran penyewa dan warna merah automatik.</p>
+                <p class="lede">Pilih zon untuk melihat 22 lot setiap satu. Gunakan penapis pantas dan carian nama/ID untuk memburu slot penting sementara tempahan aktif kekal merah secara automatik.</p>
             </div>
             <div class="hero-actions">
                 <button onclick="exportCSV()">Export CSV</button>
                 <button class="danger" onclick="deleteAllData()">Padam Semua Data</button>
                 <button class="logout" onclick="logout()">Logout</button>
             </div>
-      </section>
+        </section>
 
         <div class="stats" id="statsBar"></div>
 
@@ -39,6 +39,16 @@
             <span class="timestamp" id="lastUpdated">Kemaskini: -</span>
           </div>
         </div>
+        <div class="filter-bar">
+          <div class="chip-group">
+            <button class="filter-chip active" data-filter="all" onclick="setFilter('all')">Semua</button>
+            <button class="filter-chip" data-filter="available" onclick="setFilter('available')">Kosong sahaja</button>
+            <button class="filter-chip" data-filter="occupied" onclick="setFilter('occupied')">Penuh sahaja</button>
+          </div>
+          <div class="search-box">
+            <input type="text" id="searchTerm" placeholder="Cari nama, ID, zon atau label" oninput="setSearch(this.value)">
+          </div>
+        </div>
         <div class="garaj-container" id="garajContainer"></div>
     </div>
 
@@ -47,6 +57,10 @@
     const totalGaraj = 88;
     const garajPerZone = 22;
     const zones = ['A','B','C','D'];
+    let latestStatus = [];
+    let groupedCache = {};
+    let filterStatus = 'all';
+    let searchTerm = '';
 
     function getGarageZone(garaj){
         if (garaj <= garajPerZone) return 'A';
@@ -132,6 +146,7 @@
         const toggle = document.getElementById('autoRefresh');
         toggle.addEventListener('change', (e) => setAutoRefresh(e.target.checked));
         setAutoRefresh(true);
+        updateFilterButtons();
         fetchGarajStatus();
     });
 
@@ -167,9 +182,9 @@
     async function fetchGarajStatus(isManual=false){
       const res = await fetch(`${api}/garaj-status`);
       const status = await res.json();
+      latestStatus = status;
+      groupedCache = groupGarajByZone(status);
       renderStats(status);
-      const container = document.getElementById('garajContainer');
-      container.innerHTML='';
 
       const timestamp = document.getElementById('lastUpdated');
       if(timestamp){
@@ -177,10 +192,19 @@
         timestamp.textContent = `Kemaskini: ${now.toLocaleTimeString('ms-MY')}${isManual ? ' (Manual)' : ''}`;
       }
 
-      const grouped = groupGarajByZone(status);
+      renderBoard();
+    }
+
+    function renderBoard(){
+      const container = document.getElementById('garajContainer');
+      if(!container) return;
+      container.innerHTML='';
+
       let activeZone = container.dataset.activeZone || zones[0];
       if(!zones.includes(activeZone)) activeZone = zones[0];
       container.dataset.activeZone = activeZone;
+
+      const grouped = groupedCache && Object.keys(groupedCache).length ? groupedCache : groupGarajByZone(latestStatus);
 
       const zoneNav = document.createElement('div');
       zoneNav.className = 'zone-nav';
@@ -204,8 +228,23 @@
       container.appendChild(contentWrapper);
     }
 
+    function filterGaraj(list){
+      const term = (searchTerm || '').toLowerCase().trim();
+      return list.filter(g => {
+        if(filterStatus === 'available' && g.occupied) return false;
+        if(filterStatus === 'occupied' && !g.occupied) return false;
+        if(term){
+          const fields = [g.label, g.zone, g.occupantName, g.occupantID, g.occupantMessage];
+          const matches = fields.some(f => f && f.toString().toLowerCase().includes(term));
+          if(!matches) return false;
+        }
+        return true;
+      });
+    }
+
     function renderZone(zone, grouped, target){
-      const zoneData = grouped[zone] || [];
+      const fullZoneList = grouped[zone] || [];
+      const zoneData = filterGaraj(fullZoneList);
       target.innerHTML = '';
 
       const section = document.createElement('div');
@@ -213,7 +252,7 @@
 
       const title = document.createElement('div');
       title.className = 'zone-header';
-      const occupiedCount = zoneData.filter(g => g.occupied).length;
+      const occupiedCount = fullZoneList.filter(g => g.occupied).length;
       const availableCount = garajPerZone - occupiedCount;
       title.innerHTML = `<div><p class="eyebrow">${occupiedCount} penuh · ${availableCount} kosong</p><h4>Zone ${zone} - ${garajPerZone} Garaj</h4></div>`;
       section.appendChild(title);
@@ -224,7 +263,7 @@
       if(zoneData.length === 0){
         const empty = document.createElement('div');
         empty.className = 'empty-zone';
-        empty.textContent = 'Tiada data garaj untuk zon ini.';
+        empty.textContent = 'Tiada garaj padan dengan tapisan ini.';
         section.appendChild(empty);
         target.appendChild(section);
         return;
@@ -253,6 +292,26 @@
           </div>
         `;
         grid.appendChild(div);
+      });
+
+      section.appendChild(grid);
+      target.appendChild(section);
+    }
+
+    function setFilter(status){
+      filterStatus = status;
+      updateFilterButtons();
+      renderBoard();
+    }
+
+    function setSearch(value){
+      searchTerm = value || '';
+      renderBoard();
+    }
+
+    function updateFilterButtons(){
+      document.querySelectorAll('.filter-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filterStatus);
       });
 
       section.appendChild(grid);

@@ -14,7 +14,7 @@
     <div>
       <p class="eyebrow">Pilih garaj sendiri</p>
       <h1>Tempah serta-merta, garaj terus merah</h1>
-      <p class="lede">Tekan zon untuk buka 22 garaj. Pilih lot hijau, isi maklumat, dan slot akan disahkan serta-merta dengan warna merah.</p>
+      <p class="lede">Tekan zon untuk buka 22 garaj. Tapis ikut status atau cari nama/ID, pilih lot hijau, isi maklumat, dan slot akan disahkan serta-merta dengan warna merah.</p>
     </div>
     <div class="hero-actions">
       <button class="logout" onclick="logout()">Logout</button>
@@ -36,6 +36,16 @@
           </label>
           <button class="ghost" onclick="fetchGarajStatus(true)">Refresh</button>
           <span class="timestamp" id="lastUpdated">Kemaskini: -</span>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="chip-group">
+          <button class="filter-chip active" data-filter="all" onclick="setFilter('all')">Semua</button>
+          <button class="filter-chip" data-filter="available" onclick="setFilter('available')">Kosong sahaja</button>
+          <button class="filter-chip" data-filter="occupied" onclick="setFilter('occupied')">Penuh sahaja</button>
+        </div>
+        <div class="search-box">
+          <input type="text" placeholder="Cari nama, ID, zon atau label" oninput="setSearch(this.value)">
         </div>
       </div>
       <div class="garaj-container" id="garajContainer"></div>
@@ -70,6 +80,9 @@ let username = localStorage.getItem('username');
 let latestStatus = [];
 let selectedGarage = null;
 let refreshTimer = null;
+let groupedCache = {};
+let filterStatus = 'all';
+let searchTerm = '';
 
 function getGarageZone(garaj){
   if (garaj <= garajPerZone) return 'A';
@@ -130,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.getElementById('autoRefresh');
     toggle.addEventListener('change', (e) => setAutoRefresh(e.target.checked));
     setAutoRefresh(true);
+    updateFilterButtons();
     fetchGarajStatus();
 });
 
@@ -181,6 +195,8 @@ async function fetchGarajStatus(isManual=false){
   const res = await fetch(`${api}/garaj-status`);
   const status = await res.json();
   latestStatus = status;
+  groupedCache = groupGarajByZone(status);
+  syncSelection(status);
   const container = document.getElementById('garajContainer');
   container.innerHTML='';
 
@@ -190,10 +206,19 @@ async function fetchGarajStatus(isManual=false){
     timestamp.textContent = `Kemaskini: ${now.toLocaleTimeString('ms-MY')}${isManual ? ' (Manual)' : ''}`;
   }
 
-  const grouped = groupGarajByZone(status);
+  renderBoard();
+}
+
+function renderBoard(){
+  const container = document.getElementById('garajContainer');
+  if(!container) return;
+  container.innerHTML='';
+
   let activeZone = container.dataset.activeZone || zones[0];
   if(!zones.includes(activeZone)) activeZone = zones[0];
   container.dataset.activeZone = activeZone;
+
+  const grouped = groupedCache && Object.keys(groupedCache).length ? groupedCache : groupGarajByZone(latestStatus);
 
   const zoneNav = document.createElement('div');
   zoneNav.className = 'zone-nav';
@@ -217,8 +242,23 @@ async function fetchGarajStatus(isManual=false){
   container.appendChild(contentWrapper);
 }
 
+function filterGaraj(list){
+  const term = (searchTerm || '').toLowerCase().trim();
+  return list.filter(g => {
+    if(filterStatus === 'available' && g.occupied) return false;
+    if(filterStatus === 'occupied' && !g.occupied) return false;
+    if(term){
+      const fields = [g.label, g.zone, g.occupantName, g.occupantID, g.occupantMessage];
+      const matches = fields.some(f => f && f.toString().toLowerCase().includes(term));
+      if(!matches) return false;
+    }
+    return true;
+  });
+}
+
 function renderZone(zone, grouped, target){
-  const zoneData = grouped[zone] || [];
+  const fullZoneList = grouped[zone] || [];
+  const zoneData = filterGaraj(fullZoneList);
   target.innerHTML = '';
 
   const section = document.createElement('div');
@@ -226,7 +266,7 @@ function renderZone(zone, grouped, target){
 
   const title = document.createElement('div');
   title.className = 'zone-header';
-  const occupiedCount = zoneData.filter(g => g.occupied).length;
+  const occupiedCount = fullZoneList.filter(g => g.occupied).length;
   const availableCount = garajPerZone - occupiedCount;
   title.innerHTML = `<div><p class="eyebrow">${occupiedCount} penuh · ${availableCount} kosong</p><h4>Zone ${zone} - ${garajPerZone} Garaj</h4></div>`;
   section.appendChild(title);
@@ -237,7 +277,7 @@ function renderZone(zone, grouped, target){
   if(zoneData.length === 0){
     const empty = document.createElement('div');
     empty.className = 'empty-zone';
-    empty.textContent = 'Tiada data garaj untuk zon ini.';
+    empty.textContent = 'Tiada garaj padan dengan tapisan ini.';
     section.appendChild(empty);
     target.appendChild(section);
     return;
@@ -279,6 +319,35 @@ function renderZone(zone, grouped, target){
 
   section.appendChild(grid);
   target.appendChild(section);
+}
+
+function setFilter(status){
+  filterStatus = status;
+  updateFilterButtons();
+  renderBoard();
+}
+
+function setSearch(value){
+  searchTerm = value || '';
+  renderBoard();
+}
+
+function updateFilterButtons(){
+  document.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filterStatus);
+  });
+
+  section.appendChild(grid);
+  target.appendChild(section);
+}
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
 }
 </script>
 </body>
