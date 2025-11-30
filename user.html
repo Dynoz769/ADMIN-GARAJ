@@ -68,11 +68,17 @@ function formatGarageLabel(garaj){
 }
 
 function groupGarajByZone(statusList){
-  return statusList.reduce((acc, g) => {
+  const grouped = statusList.reduce((acc, g) => {
     if (!acc[g.zone]) acc[g.zone] = [];
     acc[g.zone].push(g);
     return acc;
   }, {});
+
+  Object.keys(grouped).forEach(zoneKey => {
+    grouped[zoneKey].sort((a, b) => a.garaj - b.garaj);
+  });
+
+  return grouped;
 }
 
 // Semak Autentikasi Pengguna
