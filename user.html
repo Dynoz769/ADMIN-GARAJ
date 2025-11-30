@@ -267,14 +267,35 @@ function renderBoard(){
   const zoneNav = document.createElement('div');
   zoneNav.className = 'zone-nav';
 
-  zones.forEach(zone => {
+  const zoneSummaries = zones.map(zone => {
+    const zoneList = grouped[zone] || [];
+    const occupiedCount = zoneList.filter(g => g.occupied).length;
+    return {
+      zone,
+      occupiedCount,
+      availableCount: garajPerZone - occupiedCount,
+    };
+  });
+
+  zoneSummaries.forEach(({ zone, occupiedCount, availableCount }) => {
     const btn = document.createElement('button');
     btn.className = `zone-pill ${activeZone === zone ? 'active' : ''}`;
-    btn.textContent = `Zone ${zone}`;
+    btn.dataset.zone = zone;
+    btn.setAttribute('aria-label', `Zone ${zone}, ${occupiedCount} penuh, ${availableCount} kosong`);
+    btn.innerHTML = `
+      <div class="zone-pill-row">
+        <div class="zone-label">Zone ${zone}</div>
+        <span class="zone-dot ${availableCount ? 'available-dot' : 'full-dot'}"></span>
+      </div>
+      <div class="zone-pill-stats">
+        <span class="zone-available">${availableCount} kosong</span>
+        <span class="zone-occupied">${occupiedCount} penuh</span>
+      </div>
+    `;
     btn.onclick = () => {
       container.dataset.activeZone = zone;
       renderZone(zone, grouped, contentWrapper);
-      [...zoneNav.children].forEach(child => child.classList.toggle('active', child.textContent === `Zone ${zone}`));
+      [...zoneNav.children].forEach(child => child.classList.toggle('active', child.dataset.zone === zone));
     };
     zoneNav.appendChild(btn);
   });
@@ -383,6 +404,15 @@ function updateFilterButtons(){
 
   section.appendChild(grid);
   target.appendChild(section);
+}
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
 }
 
 function syncSelection(status){
