@@ -47,7 +47,30 @@
 
 <script>
     const api = "https://admin-garaj-1.onrender.com";
-    const totalGaraj = 8;
+    const totalGaraj = 88;
+    const garajPerZone = 22;
+    const zones = ['A','B','C','D'];
+
+    function getGarageZone(garaj){
+        if (garaj <= garajPerZone) return 'A';
+        if (garaj <= garajPerZone * 2) return 'B';
+        if (garaj <= garajPerZone * 3) return 'C';
+        return 'D';
+    }
+
+    function formatGarageLabel(garaj){
+        const zone = getGarageZone(garaj);
+        const offset = garaj - ((zone.charCodeAt(0) - 65) * garajPerZone);
+        return `${zone}${String(offset).padStart(2,'0')}`;
+    }
+
+    function groupGarajByZone(statusList){
+        return statusList.reduce((acc, g) => {
+            if (!acc[g.zone]) acc[g.zone] = [];
+            acc[g.zone].push(g);
+            return acc;
+        }, {});
+    }
     
     // Semak Autentikasi Admin
     document.addEventListener('DOMContentLoaded', () => {
@@ -102,7 +125,7 @@
                 
                 // Tambah pilihan dari 1 hingga 8. Pilihan ini akan disemak ketersediaannya di server nanti.
                 for (let i = 1; i <= totalGaraj; i++) {
-                     garajOptions += `<option value="${i}">Garaj ${i}</option>`;
+                     garajOptions += `<option value="${i}">${formatGarageLabel(i)} (Zone ${getGarageZone(i)})</option>`;
                 }
                 garajOptions += `</select>`;
 
@@ -228,12 +251,79 @@
       const container = document.getElementById('garajContainer');
       container.innerHTML='';
 
-      status.forEach(g=>{
+      const grouped = groupGarajByZone(status);
+      let activeZone = container.dataset.activeZone || zones[0];
+      if(!zones.includes(activeZone)) activeZone = zones[0];
+      container.dataset.activeZone = activeZone;
+
+      const zoneNav = document.createElement('div');
+      zoneNav.className = 'zone-nav';
+
+      zones.forEach(zone => {
+        const btn = document.createElement('button');
+        btn.className = `zone-pill ${activeZone === zone ? 'active' : ''}`;
+        btn.textContent = `Zone ${zone}`;
+        btn.onclick = () => {
+          container.dataset.activeZone = zone;
+          renderZone(zone, grouped, contentWrapper);
+          [...zoneNav.children].forEach(child => child.classList.toggle('active', child.textContent === `Zone ${zone}`));
+        };
+        zoneNav.appendChild(btn);
+      });
+
+      const contentWrapper = document.createElement('div');
+      renderZone(activeZone, grouped, contentWrapper);
+
+      container.appendChild(zoneNav);
+      container.appendChild(contentWrapper);
+    }
+
+    function renderZone(zone, grouped, target){
+      const zoneData = grouped[zone] || [];
+      target.innerHTML = '';
+
+      const section = document.createElement('div');
+      section.className = 'zone-section';
+
+      const title = document.createElement('h4');
+      title.textContent = `Zone ${zone} - ${garajPerZone} Garaj`;
+      section.appendChild(title);
+
+      const grid = document.createElement('div');
+      grid.className = 'garaj-grid';
+
+      if(zoneData.length === 0){
+        const empty = document.createElement('div');
+        empty.className = 'empty-zone';
+        empty.textContent = 'Tiada data garaj untuk zon ini.';
+        section.appendChild(empty);
+        target.appendChild(section);
+        return;
+      }
+
+      zoneData.forEach(g => {
         const div = document.createElement('div');
         div.className = `garaj ${g.occupied ? 'occupied' : 'available'}`;
-        div.innerHTML = `Garaj ${g.garaj}<br>(${g.occupied ? 'Penuh' : 'Kosong'})`;
-        container.appendChild(div);
+
+        const occupantInfo = g.occupied ? `
+          <div class="garaj-tenant"><strong>Nama:</strong> ${g.occupantName || 'Tidak diketahui'}</div>
+          <div class="garaj-tenant"><strong>ID:</strong> ${g.occupantID || '-'}</div>
+          <div class="garaj-tenant"><strong>Bulan Mula:</strong> ${g.occupantStartMonth || '-'}</div>
+          <div class="garaj-tenant"><strong>Bulan Tamat:</strong> ${g.occupantEndMonth || '-'}</div>
+          <div class="garaj-tenant"><strong>Tempoh:</strong> ${g.occupantDuration ? g.occupantDuration + ' bulan' : '-'}</div>
+          <div class="garaj-tenant"><strong>Mesej:</strong> ${g.occupantMessage || '-'}</div>
+        ` : '<div class="garaj-tenant">Tiada penyewa</div>';
+
+        div.innerHTML = `
+          <div class="garaj-label">${g.label}</div>
+          <div class="garaj-status">${g.occupied ? 'Penuh' : 'Kosong'}</div>
+          ${occupantInfo}
+        `;
+        grid.appendChild(div);
       });
+
+      section.appendChild(grid);
+      target.appendChild(section);
     }
 
     function exportCSV(){
@@ -242,4 +332,4 @@
 
 </script>
 </body>
-</html>>
+</html>
