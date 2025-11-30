@@ -181,7 +181,9 @@
 
       const title = document.createElement('div');
       title.className = 'zone-header';
-      title.innerHTML = `<div><p class="eyebrow">${zoneData.filter(g => g.occupied).length} Penuh</p><h4>Zone ${zone} - ${garajPerZone} Garaj</h4></div>`;
+      const occupiedCount = zoneData.filter(g => g.occupied).length;
+      const availableCount = garajPerZone - occupiedCount;
+      title.innerHTML = `<div><p class="eyebrow">${occupiedCount} penuh · ${availableCount} kosong</p><h4>Zone ${zone} - ${garajPerZone} Garaj</h4></div>`;
       section.appendChild(title);
 
       const grid = document.createElement('div');
@@ -201,18 +203,22 @@
         div.className = `garaj ${g.occupied ? 'occupied' : 'available'}`;
 
         const occupantInfo = g.occupied ? `
-          <div class="garaj-tenant"><strong>Nama:</strong> ${g.occupantName || 'Tidak diketahui'}</div>
-          <div class="garaj-tenant"><strong>ID:</strong> ${g.occupantID || '-'}</div>
-          <div class="garaj-tenant"><strong>Bulan Mula:</strong> ${g.occupantStartMonth || '-'}</div>
-          <div class="garaj-tenant"><strong>Bulan Tamat:</strong> ${g.occupantEndMonth || '-'}</div>
-          <div class="garaj-tenant"><strong>Tempoh:</strong> ${g.occupantDuration ? g.occupantDuration + ' bulan' : '-'}</div>
-          <div class="garaj-tenant"><strong>Mesej:</strong> ${g.occupantMessage || '-'}</div>
-        ` : '<div class="garaj-tenant">Tiada penyewa</div>';
+          <div class="garaj-info">Nama: <span>${g.occupantName || 'Tidak diketahui'}</span></div>
+          <div class="garaj-info">ID: <span>${g.occupantID || '-'}</span></div>
+          <div class="garaj-info">Bulan Mula: <span>${g.occupantStartMonth || '-'}</span></div>
+          <div class="garaj-info">Bulan Tamat: <span>${g.occupantEndMonth || '-'}</span></div>
+          <div class="garaj-info">Tempoh: <span>${g.occupantDuration ? g.occupantDuration + ' bulan' : '-'}</span></div>
+          <div class="garaj-info">Mesej: <span>${g.occupantMessage || '-'}</span></div>
+        ` : '<div class="garaj-info empty">Tiada penyewa</div>';
 
         div.innerHTML = `
-          <div class="garaj-label">${g.label}</div>
-          <div class="garaj-status">${g.occupied ? 'Penuh' : 'Kosong'}</div>
-          ${occupantInfo}
+          <div class="garaj-label-row">
+            <div class="garaj-label">${g.label}</div>
+            <div class="garaj-status">${g.occupied ? 'Penuh' : 'Kosong'}</div>
+          </div>
+          <div class="garaj-body">
+            ${occupantInfo}
+          </div>
         `;
         grid.appendChild(div);
       });
