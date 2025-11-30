@@ -201,6 +201,20 @@ app.get('/', (req, res) => {
 });
 
 // ===============================================
+// ✅ FIREBASE HEALTHCHECK
+// ===============================================
+app.get('/health/firebase', async (req, res) => {
+        try {
+                const offsetSnap = await db.ref('.info/serverTimeOffset').once('value');
+                const offset = offsetSnap.val() || 0;
+                res.status(200).json({ ok: true, offset });
+        } catch (error) {
+                console.error('Firebase healthcheck failed:', error);
+                res.status(500).json({ ok: false, message: 'Firebase tidak dapat dihubungi.' });
+        }
+});
+
+// ===============================================
 // ✅ ANALYTICS ENDPOINT	
 // ===============================================
 app.get('/analytics', async (req, res) => {
@@ -410,7 +424,7 @@ app.get('/bookings/history/:username', async (req, res) => {
 app.post('/bookings', async (req, res) => {
         const { username, studentName, studentID, startMonth, duration, garaj } = req.body;
 
-        const garajNumber = parseInt(garaj, 10);
+        const garajNumber = toGarajNumber(garaj);
 
         if (!studentName || !studentID || !startMonth || !duration || !username || !garajNumber) {
                 return res.status(400).json({ success: false, message: 'Sila isi semua ruangan termasuk pilihan garaj.' });
@@ -682,9 +696,9 @@ app.get('/export/csv', async (req, res) => {
 // ✅ QUEUE CHECKER	
 // ===============================================
 async function checkQueue() {
-	try {
-		const snapshot = await bookingsRef.orderByChild('status').equalTo('Pending').once('value');
-		let pendingBookings = snapshotToArray(snapshot);
+        try {
+                const snapshot = await bookingsRef.orderByChild('status').equalTo('Pending').once('value');
+                let pendingBookings = snapshotToArray(snapshot);
 		
 		// Susun mengikut masa tempahan (atau ID) untuk FIFO (First In, First Out)
 		pendingBookings.sort((a, b) => a.id.localeCompare(b.id));	
@@ -709,6 +723,14 @@ async function checkQueue() {
 }
 // Jalankan semakan queue setiap 30 saat untuk menangani queue secara automatik
 setInterval(checkQueue, 30000);
+
+// ===============================================
+// ✅ GLOBAL ERROR HANDLER
+// ===============================================
+app.use((err, req, res, next) => {
+        console.error('Unhandled error:', err);
+        res.status(500).json({ success: false, message: 'Ralat pelayan. Sila cuba lagi.' });
+});
 
 // ===============================================
 // START SERVER

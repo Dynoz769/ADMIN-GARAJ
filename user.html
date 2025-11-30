@@ -29,7 +29,10 @@
             <span class="legend-pill occupied-pill">Penuh</span>
             <span class="legend-pill available-pill">Kosong</span>
           </div>
-        <div class="control-note">Status papan terus dikemas kini apabila anda membuka halaman.</div>
+        <div class="control-note">
+          <div>Status papan terus dikemas kini apabila anda membuka halaman.</div>
+          <div id="lastUpdated" class="muted-text"></div>
+        </div>
       </div>
       <div class="filter-bar">
         <div class="chip-group">
@@ -76,6 +79,7 @@ let groupedCache = {};
 let filterStatus = 'all';
 let searchTerm = '';
 let boardError = '';
+const STATUS_CACHE_KEY = 'userStatusCache';
 
 function buildEmptyStatus(){
   return Array.from({length: totalGaraj}, (_,i) => {
@@ -156,8 +160,10 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = 'login.html';
     }
     updateFilterButtons();
-    latestStatus = ensureAllGarages(latestStatus);
+    const cached = loadCachedStatus();
+    latestStatus = ensureAllGarages(cached?.data || latestStatus);
     groupedCache = groupGarajByZone(latestStatus);
+    renderLastUpdated(cached?.updatedAt);
     renderBoard();
     fetchGarajStatus();
 });
@@ -179,10 +185,10 @@ async function bookGarage(){
   if (!selectedGarage) return alert('Sila pilih garaj berwarna hijau dahulu.');
   if(!studentName || !studentID || !startMonth || !duration) return alert('Sila lengkapkan semua maklumat!');
 
-  const res = await fetch(`${api}/bookings`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({username,studentName,studentID,startMonth,duration,garaj:selectedGarage.garaj})
+    const res = await fetch(`${api}/bookings`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username,studentName,studentID,startMonth,duration,garaj:selectedGarage.garaj})
   });
 
   const data = await res.json();
@@ -206,6 +212,7 @@ async function fetchGarajStatus(){
     latestStatus = ensureAllGarages(status);
     groupedCache = groupGarajByZone(latestStatus);
     syncSelection(latestStatus);
+    cacheStatus(latestStatus);
     boardError = '';
 
   } catch (error) {
@@ -223,6 +230,7 @@ async function fetchGarajStatus(){
   const container = document.getElementById('garajContainer');
   if(container) container.innerHTML='';
 
+  renderLastUpdated();
   renderBoard();
 }
 
@@ -470,6 +478,45 @@ function syncSelection(status){
     selectedGarage = null;
     document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
   }
+}
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
+}
+
+function cacheStatus(data){
+  const payload = { updatedAt: Date.now(), data };
+  localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify(payload));
+  renderLastUpdated(payload.updatedAt);
+}
+
+function loadCachedStatus(){
+  try {
+    const raw = localStorage.getItem(STATUS_CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(parsed && Array.isArray(parsed.data)) return parsed;
+  } catch(e){
+    console.warn('Tidak dapat memuat cache status', e);
+  }
+  return null;
+}
+
+function renderLastUpdated(timestamp){
+  const node = document.getElementById('lastUpdated');
+  if(!node) return;
+  const ts = timestamp || JSON.parse(localStorage.getItem(STATUS_CACHE_KEY) || '{}').updatedAt;
+  if(!ts){
+    node.textContent = 'Menunggu status terkini...';
+    return;
+  }
+  const date = new Date(ts);
+  node.textContent = `Dikemas kini ${date.toLocaleString('ms-MY')}`;
 }
 </script>
 </body>

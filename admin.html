@@ -29,7 +29,10 @@
             <span class="legend-pill occupied-pill">Penuh</span>
             <span class="legend-pill available-pill">Kosong</span>
           </div>
-          <div class="control-note">Paparan akan terus memaparkan semua zon tanpa perlu refresh.</div>
+          <div class="control-note">
+            <div>Paparan akan terus memaparkan semua zon tanpa perlu refresh.</div>
+            <div id="lastUpdated" class="muted-text"></div>
+          </div>
         </div>
         <div class="filter-bar">
           <div class="chip-group">
@@ -54,6 +57,7 @@
     let filterStatus = 'all';
     let searchTerm = '';
     let boardError = '';
+    const STATUS_CACHE_KEY = 'adminStatusCache';
 
     function buildEmptyStatus(){
       return Array.from({length: totalGaraj}, (_,i) => {
@@ -157,8 +161,11 @@
             window.location.href = 'login.html';
         }
         updateFilterButtons();
-        latestStatus = ensureAllGarages(latestStatus);
+        const cached = loadCachedStatus();
+        latestStatus = ensureAllGarages(cached?.data || latestStatus);
         groupedCache = groupGarajByZone(latestStatus);
+        renderStats(latestStatus);
+        renderLastUpdated(cached?.updatedAt);
         renderBoard();
         fetchGarajStatus();
     });
@@ -177,6 +184,7 @@
         latestStatus = ensureAllGarages(status);
         groupedCache = groupGarajByZone(latestStatus);
         renderStats(latestStatus);
+        cacheStatus(latestStatus);
         boardError = '';
       } catch (error) {
         console.error('Gagal memuat status garaj', error);
@@ -191,6 +199,7 @@
         boardError = 'Gagal memuat status terkini. Paparan menunjukkan data kosong.';
       }
 
+      renderLastUpdated();
       renderBoard();
     }
 
@@ -352,6 +361,36 @@
 
     function exportCSV(){
         window.location.href = `${api}/export/csv`;
+    }
+
+    function cacheStatus(data){
+      const payload = { updatedAt: Date.now(), data };
+      localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify(payload));
+      renderLastUpdated(payload.updatedAt);
+    }
+
+    function loadCachedStatus(){
+      try {
+        const raw = localStorage.getItem(STATUS_CACHE_KEY);
+        if(!raw) return null;
+        const parsed = JSON.parse(raw);
+        if(parsed && Array.isArray(parsed.data)) return parsed;
+      } catch(e){
+        console.warn('Tidak dapat memuat cache status', e);
+      }
+      return null;
+    }
+
+    function renderLastUpdated(timestamp){
+      const node = document.getElementById('lastUpdated');
+      if(!node) return;
+      const ts = timestamp || JSON.parse(localStorage.getItem(STATUS_CACHE_KEY) || '{}').updatedAt;
+      if(!ts){
+        node.textContent = 'Menunggu status terkini...';
+        return;
+      }
+      const date = new Date(ts);
+      node.textContent = `Dikemas kini ${date.toLocaleString('ms-MY')}`;
     }
 
 </script>

@@ -234,7 +234,16 @@ h3::after {
   font-weight: 600;
   text-align: right;
   flex: 1;
-  min-width: 240px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.muted-text {
+  color: #94a3b8;
+  font-weight: 500;
+  font-size: 0.85rem;
 }
 
 .stat-card {
@@ -320,7 +329,7 @@ button {
   overflow: hidden;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: linear-gradient(135deg, #8ba3ff, #0ac7a7);
+  background: linear-gradient(135deg, #6f7cff, #0ac7a7);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
