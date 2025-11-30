@@ -432,6 +432,64 @@ button.cancel-btn {
   gap: 1.25rem;
 }
 
+.zone-nav {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.zone-pill {
+  background: #f4f6fb;
+  color: var(--color-text);
+  border: 2px solid transparent;
+  padding: 0.65rem 1.2rem;
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  text-transform: none;
+  letter-spacing: 0.3px;
+}
+
+.zone-pill.active {
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, #fff6e0 0%, #ffe8b3 100%);
+  box-shadow: var(--shadow-md);
+}
+
+.zone-section {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  padding: 1rem 1.25rem;
+}
+
+.zone-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.zone-section h4 {
+  margin: 0;
+  color: var(--color-text);
+  letter-spacing: 1px;
+}
+
+.empty-zone {
+  text-align: center;
+  color: var(--color-text-light);
+  padding: 1.5rem;
+  font-weight: 600;
+}
+
+.garaj-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
 .garaj {
   min-height: 160px;
   display: flex;
@@ -493,6 +551,19 @@ button.cancel-btn {
 .garaj-info.empty {
   opacity: 0.85;
   font-weight: 700;
+}
+
+.garaj-label {
+  font-size: 1.3rem;
+}
+
+.garaj-status {
+  font-weight: 800;
+}
+
+.garaj-tenant {
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .garaj::before {
