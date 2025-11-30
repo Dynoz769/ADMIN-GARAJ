@@ -97,6 +97,16 @@ function buildEmptyStatus(){
   });
 }
 
+function ensureAllGarages(statusList){
+  const base = buildEmptyStatus();
+  const mapped = new Map((Array.isArray(statusList) ? statusList : []).map(item => {
+    const num = Number(item.garaj);
+    return [num, { ...item, garaj: num, zone: item.zone || getGarageZone(num), label: item.label || formatGarageLabel(num) }];
+  }));
+
+  return base.map(empty => mapped.get(empty.garaj) || empty);
+}
+
 function getGarageZone(garaj){
   if (garaj <= garajPerZone) return 'A';
   if (garaj <= garajPerZone * 2) return 'B';
@@ -208,7 +218,7 @@ async function fetchGarajStatus(isManual=false){
   try {
     const res = await fetch(`${api}/garaj-status`);
     const status = await res.json();
-    latestStatus = Array.isArray(status) ? status : [];
+    latestStatus = ensureAllGarages(status);
     groupedCache = groupGarajByZone(latestStatus);
     syncSelection(latestStatus);
     boardError = '';
@@ -222,6 +232,9 @@ async function fetchGarajStatus(isManual=false){
     console.error('Gagal memuat status garaj', error);
     if(!latestStatus || latestStatus.length === 0){
       latestStatus = buildEmptyStatus();
+      groupedCache = groupGarajByZone(latestStatus);
+    } else {
+      latestStatus = ensureAllGarages(latestStatus);
       groupedCache = groupGarajByZone(latestStatus);
     }
     boardError = 'Gagal memuat status terkini. Paparan menunjukkan data kosong.';
@@ -370,6 +383,15 @@ function updateFilterButtons(){
 
   section.appendChild(grid);
   target.appendChild(section);
+}
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
 }
 
 function syncSelection(status){
