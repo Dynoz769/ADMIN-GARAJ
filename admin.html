@@ -226,7 +226,12 @@
       if(!zones.includes(activeZone)) activeZone = zones[0];
       container.dataset.activeZone = activeZone;
 
-      const grouped = groupedCache && Object.keys(groupedCache).length ? groupedCache : groupGarajByZone(latestStatus);
+      const normalizedStatus = ensureAllGarages(latestStatus);
+      if (!groupedCache || !Object.keys(groupedCache).length) {
+        groupedCache = groupGarajByZone(normalizedStatus);
+      }
+
+      const grouped = groupedCache;
 
       const zoneNav = document.createElement('div');
       zoneNav.className = 'zone-nav';

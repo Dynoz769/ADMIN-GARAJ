@@ -242,7 +242,12 @@ function renderBoard(){
   if(!zones.includes(activeZone)) activeZone = zones[0];
   container.dataset.activeZone = activeZone;
 
-  const grouped = groupedCache && Object.keys(groupedCache).length ? groupedCache : groupGarajByZone(latestStatus);
+  const normalizedStatus = ensureAllGarages(latestStatus);
+  if (!groupedCache || !Object.keys(groupedCache).length) {
+    groupedCache = groupGarajByZone(normalizedStatus);
+  }
+
+  const grouped = groupedCache;
 
   const zoneNav = document.createElement('div');
   zoneNav.className = 'zone-nav';
@@ -384,6 +389,15 @@ function updateFilterButtons(){
 
   section.appendChild(grid);
   target.appendChild(section);
+}
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
 }
 
 function syncSelection(status){
