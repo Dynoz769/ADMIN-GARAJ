@@ -259,7 +259,7 @@ app.post('/login', async (req, res) => {
 app.get('/garaj-status', async (req, res) => {
         try {
                 const snapshot = await bookingsRef.once('value');
-                const bookings = snapshotToArray(snapshot).filter(b => b.status === 'Approved' && b.garaj);
+                const bookings = snapshotToArray(snapshot).filter(b => b.garaj && !['Cancelled', 'Rejected'].includes(b.status));
                 const today = new Date();
                 const statusList = [];
 
@@ -273,7 +273,8 @@ app.get('/garaj-status', async (req, res) => {
                                         const startDate = new Date(bStart.getFullYear(), bStart.getMonth(), 1);
                                         const endDate = new Date(bEnd.getFullYear(), bEnd.getMonth() + 1, 0);
 
-                                        return today >= startDate && today <= endDate;
+                                        // Tanda merah segera jika tempahan masih sah atau akan bermula
+                                        return today <= endDate;
                                 } catch (e) {
                                         return false;
                                 }
@@ -305,28 +306,28 @@ app.get('/garaj-status', async (req, res) => {
 // ✅ BOOKING ENDPOINTS	
 // ===============================================
 
-// GET /bookings (Admin: Filter & Search)
+// GET /bookings (Admin: Filter & Search) — legacy support only
 app.get('/bookings', async (req, res) => {
         const { search, status } = req.query;
         try {
                 const snapshot = await bookingsRef.once('value');
-		let bookings = snapshotToArray(snapshot);
-		
-		if (status) {
-			bookings = bookings.filter(b => b.status === status);
-		}
-		
-		if (search) {
-			const searchTerm = search.toLowerCase();
-			bookings = bookings.filter(b =>	
-				b.studentName.toLowerCase().includes(searchTerm) ||
-				b.studentID.toLowerCase().includes(searchTerm)
-			);
-		}
-		
-		res.json(bookings);
-	} catch (error) {
-		console.error('Bookings list error:', error);
+                let bookings = snapshotToArray(snapshot);
+
+                if (status) {
+                        bookings = bookings.filter(b => b.status === status);
+                }
+
+                if (search) {
+                        const searchTerm = search.toLowerCase();
+                        bookings = bookings.filter(b =>
+                                b.studentName.toLowerCase().includes(searchTerm) ||
+                                b.studentID.toLowerCase().includes(searchTerm)
+                        );
+                }
+
+                res.json(bookings);
+        } catch (error) {
+                console.error('Bookings list error:', error);
                 res.status(500).json([]);
         }
 });
@@ -342,97 +343,115 @@ app.delete('/bookings', async (req, res) => {
         }
 });
 
-// GET /user-bookings (User: Filter by studentID)
+// GET /user-bookings (User: Filter by studentID) — legacy support only
 app.get('/user-bookings', async (req, res) => {
-	const { studentID } = req.query;
-	if (!studentID) {
-		return res.status(400).json({ success: false, message: 'Student ID diperlukan.' });
-	}
+        const { studentID } = req.query;
+        if (!studentID) {
+                return res.status(400).json({ success: false, message: 'Student ID diperlukan.' });
+        }
 
-	try {
-		const snapshot = await bookingsRef.once('value');
-		let bookings = snapshotToArray(snapshot);
-		
-		bookings = bookings.filter(b => b.studentID === studentID);
-		
-		res.json(bookings);
-	} catch (error) {
-		console.error('User bookings list error:', error);
-		res.status(500).json([]);
-	}
+        try {
+                const snapshot = await bookingsRef.once('value');
+                let bookings = snapshotToArray(snapshot);
+
+                bookings = bookings.filter(b => b.studentID === studentID);
+
+                res.json(bookings);
+        } catch (error) {
+                console.error('User bookings list error:', error);
+                res.status(500).json([]);
+        }
 });
 
-// ✅ Laluan untuk user.html mendapatkan senarai tempahan
-// GET /bookings/history/:username	
+// ✅ Laluan untuk user.html mendapatkan senarai tempahan — tidak lagi digunakan tetapi dikekalkan
+// GET /bookings/history/:username
 app.get('/bookings/history/:username', async (req, res) => {
-	const { username } = req.params;
-	try {
-		const snapshot = await bookingsRef.once('value');
-		let bookings = snapshotToArray(snapshot);
-		
-		bookings = bookings.filter(b => b.username === username);	
-		
-		res.json(bookings);
-	} catch (error) {
-		console.error('User history error:', error);
-		res.status(500).json([]);
-	}
+        const { username } = req.params;
+        try {
+                const snapshot = await bookingsRef.once('value');
+                let bookings = snapshotToArray(snapshot);
+
+                bookings = bookings.filter(b => b.username === username);
+
+                res.json(bookings);
+        } catch (error) {
+                console.error('User history error:', error);
+                res.status(500).json([]);
+        }
 });
 
 
-// POST /bookings (User: Create booking)
+// POST /bookings (User: Create booking with explicit garage selection)
 app.post('/bookings', async (req, res) => {
-	const { username, studentName, studentID, startMonth, duration } = req.body;	
-	
-	if (!studentName || !studentID || !startMonth || !duration || !username) {
-		return res.status(400).json({ success: false, message: 'Sila isi semua ruangan yang wajib.' });
-	}
-	
-	const durationMonths = parseInt(duration);
-	
-	try {
-		// Asumsi startMonth dalam format YYYY-MM
-		const startDate = parseDMY(`01/${startMonth.substring(5, 7)}/${startMonth.substring(0, 4)}`);
-		
-		// Menentukan endMonth: Tambah tempoh (durationMonths) ke bulan mula (startDate.getMonth()),
-		// dan dapatkan hari terakhir bulan tersebut (hari 0 bulan seterusnya)
-		const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + durationMonths, 0);	
-		
-		const bookingData = {
-			username,	
-			studentName,
-			studentID,
-			startMonth: formatDateDMY(startDate),
-			endMonth: formatDateDMY(endDate),
-			duration: durationMonths,
-			garaj: null,	
-			status: 'Pending',
-			message: 'Menunggu kelulusan Admin'
-		};
-		
-		const available = await getAvailableGarage(bookingData.startMonth, bookingData.endMonth);
-		
-		if(available.length > 0) {
-			 bookingData.garaj = available[0];
-			 bookingData.status = 'Approved';
-			 bookingData.message = `Garaj ${available[0]} ditetapkan.`;
-		} else {
-			 bookingData.message = 'Tiada garaj tersedia dalam tempoh ini. Dalam barisan (Queue).';
-		}
-		
-		const newBookingRef = bookingsRef.push(bookingData);
-		await newBookingRef.update({ id: newBookingRef.key });
+        const { username, studentName, studentID, startMonth, duration, garaj } = req.body;
 
-		if (bookingData.status === 'Approved') {
-			return res.status(201).json({ success: true, message: `Tempahan diterima dan Garaj ${bookingData.garaj} ditetapkan secara automatik.` });
-		} else {
-			return res.status(201).json({ success: true, message: 'Tempahan berjaya dibuat. Menunggu kelulusan Admin (dalam barisan).' });
-		}
-		
-	} catch (error) {
-		console.error('Booking creation error:', error);
-		return res.status(500).json({ success: false, message: 'Ralat Server. Sila cuba lagi.' });
-	}
+        const garajNumber = parseInt(garaj, 10);
+
+        if (!studentName || !studentID || !startMonth || !duration || !username || !garajNumber) {
+                return res.status(400).json({ success: false, message: 'Sila isi semua ruangan termasuk pilihan garaj.' });
+        }
+
+        if (garajNumber < 1 || garajNumber > totalGaraj) {
+                return res.status(400).json({ success: false, message: 'Pilihan garaj tidak sah.' });
+        }
+
+        const durationMonths = parseInt(duration);
+
+        try {
+                const startDate = parseDMY(`01/${startMonth.substring(5, 7)}/${startMonth.substring(0, 4)}`);
+                const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + durationMonths, 0);
+
+                const newBookingRange = {
+                        start: startDate,
+                        end: endDate
+                };
+
+                const snapshot = await bookingsRef.once('value');
+                const bookings = snapshotToArray(snapshot);
+
+                const hasOverlap = bookings.some(b => {
+                        if (b.garaj !== garajNumber) return false;
+                        if (['Cancelled', 'Rejected'].includes(b.status)) return false;
+                        if (!b.startMonth || !b.endMonth) return false;
+
+                        try {
+                                const bStart = parseDMY(b.startMonth);
+                                const bEnd = parseDMY(b.endMonth);
+                                const bCheckStart = new Date(bStart.getFullYear(), bStart.getMonth() + 1, 0);
+                                const bCheckEnd = new Date(bEnd.getFullYear(), bEnd.getMonth() + 1, 0);
+
+                                return newBookingRange.start <= bCheckEnd && newBookingRange.end >= bCheckStart;
+                        } catch (e) {
+                                return false;
+                        }
+                });
+
+                if (hasOverlap) {
+                        return res.status(400).json({ success: false, message: `Garaj ${formatGarageLabel(garajNumber)} sudah ditempah dalam tempoh ini.` });
+                }
+
+                const bookingData = {
+                        username,
+                        studentName,
+                        studentID,
+                        startMonth: formatDateDMY(startDate),
+                        endMonth: formatDateDMY(endDate),
+                        duration: durationMonths,
+                        garaj: garajNumber,
+                        status: 'Approved',
+                        message: `Tempahan disahkan untuk ${formatGarageLabel(garajNumber)}.`,
+                        zone: getGarageZone(garajNumber)
+                };
+
+                const newBookingRef = bookingsRef.push(bookingData);
+                await newBookingRef.update({ id: newBookingRef.key });
+
+                return res.status(201).json({ success: true, message: `Tempahan berjaya! ${formatGarageLabel(garajNumber)} dikunci untuk anda.` });
+
+        } catch (error) {
+                console.error('Booking creation error:', error);
+                return res.status(500).json({ success: false, message: 'Ralat Server. Sila cuba lagi.' });
+        }
 });
 
 // POST /bookings/:id/garaj (Admin: Assign garage)
