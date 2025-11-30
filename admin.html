@@ -30,14 +30,7 @@
             <span class="legend-pill occupied-pill">Penuh</span>
             <span class="legend-pill available-pill">Kosong</span>
           </div>
-          <div class="control-actions">
-            <label class="toggle">
-              <input type="checkbox" id="autoRefresh" checked>
-              <span>Auto refresh 20s</span>
-            </label>
-            <button class="ghost" onclick="fetchGarajStatus(true)">Refresh</button>
-            <span class="timestamp" id="lastUpdated">Kemaskini: -</span>
-          </div>
+          <div class="control-note">Paparan akan terus memaparkan semua zon tanpa perlu refresh.</div>
         </div>
         <div class="filter-bar">
           <div class="chip-group">
@@ -157,8 +150,6 @@
         `;
     }
 
-    let refreshTimer = null;
-
     // Semak Autentikasi Admin
     document.addEventListener('DOMContentLoaded', () => {
         const role = localStorage.getItem('role');
@@ -166,10 +157,10 @@
             alert('Akses ditolak.');
             window.location.href = 'login.html';
         }
-        const toggle = document.getElementById('autoRefresh');
-        toggle.addEventListener('change', (e) => setAutoRefresh(e.target.checked));
-        setAutoRefresh(true);
         updateFilterButtons();
+        latestStatus = ensureAllGarages(latestStatus);
+        groupedCache = groupGarajByZone(latestStatus);
+        renderBoard();
         fetchGarajStatus();
     });
 
@@ -195,14 +186,7 @@
     }
 
     // ===== GARAGE STATUS VISUALS =====
-    function setAutoRefresh(enabled){
-      if(refreshTimer) clearInterval(refreshTimer);
-      if(enabled){
-        refreshTimer = setInterval(() => fetchGarajStatus(), 20000);
-      }
-    }
-
-    async function fetchGarajStatus(isManual=false){
+    async function fetchGarajStatus(){
       try {
         const res = await fetch(`${api}/garaj-status`);
         const status = await res.json();
@@ -210,12 +194,6 @@
         groupedCache = groupGarajByZone(latestStatus);
         renderStats(latestStatus);
         boardError = '';
-
-        const timestamp = document.getElementById('lastUpdated');
-        if(timestamp){
-          const now = new Date();
-          timestamp.textContent = `Kemaskini: ${now.toLocaleTimeString('ms-MY')}${isManual ? ' (Manual)' : ''}`;
-        }
       } catch (error) {
         console.error('Gagal memuat status garaj', error);
         if(!latestStatus || latestStatus.length === 0){

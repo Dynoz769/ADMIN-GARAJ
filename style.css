@@ -229,31 +229,12 @@ h3::after {
 .occupied-pill { background: linear-gradient(135deg, #fca5a5, #ef4444); color: #2d0b0b; }
 .available-pill { background: linear-gradient(135deg, #bbf7d0, #22c55e); color: #0f4226; }
 
-.control-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.timestamp { color: #cbd5e1; font-weight: 600; }
-
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: #e2e8f0;
+.control-note {
+  color: #cbd5e1;
   font-weight: 600;
-}
-
-.toggle input { accent-color: var(--color-accent); width: 18px; height: 18px; }
-
-button.ghost {
-  background: rgba(111, 124, 255, 0.16);
-  border: 1px solid rgba(111, 124, 255, 0.45);
-  color: #e0e7ff;
-  box-shadow: var(--shadow-sm);
-  padding: 0.6rem 1.1rem;
+  text-align: right;
+  flex: 1;
+  min-width: 240px;
 }
 
 .stat-card {

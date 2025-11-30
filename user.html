@@ -21,22 +21,15 @@
     </div>
   </section>
 
-  <div class="layout-grid">
-    <div>
-      <h3>Status Garaj</h3>
-      <div class="board-controls">
-        <div class="legend">
-          <span class="legend-pill occupied-pill">Penuh</span>
-          <span class="legend-pill available-pill">Kosong</span>
-        </div>
-        <div class="control-actions">
-          <label class="toggle">
-            <input type="checkbox" id="autoRefresh" checked>
-            <span>Auto refresh 20s</span>
-          </label>
-          <button class="ghost" onclick="fetchGarajStatus(true)">Refresh</button>
-          <span class="timestamp" id="lastUpdated">Kemaskini: -</span>
-        </div>
+    <div class="layout-grid">
+      <div>
+        <h3>Status Garaj</h3>
+        <div class="board-controls">
+          <div class="legend">
+            <span class="legend-pill occupied-pill">Penuh</span>
+            <span class="legend-pill available-pill">Kosong</span>
+          </div>
+        <div class="control-note">Status papan terus dikemas kini apabila anda membuka halaman.</div>
       </div>
       <div class="filter-bar">
         <div class="chip-group">
@@ -79,7 +72,6 @@ const zones = ['A','B','C','D'];
 let username = localStorage.getItem('username');
 let latestStatus = [];
 let selectedGarage = null;
-let refreshTimer = null;
 let groupedCache = {};
 let filterStatus = 'all';
 let searchTerm = '';
@@ -163,10 +155,10 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Sila login untuk mengakses dashboard pengguna.');
         window.location.href = 'login.html';
     }
-    const toggle = document.getElementById('autoRefresh');
-    toggle.addEventListener('change', (e) => setAutoRefresh(e.target.checked));
-    setAutoRefresh(true);
     updateFilterButtons();
+    latestStatus = ensureAllGarages(latestStatus);
+    groupedCache = groupGarajByZone(latestStatus);
+    renderBoard();
     fetchGarajStatus();
 });
 
@@ -175,13 +167,6 @@ function logout() {
     localStorage.removeItem('role');
     localStorage.removeItem('studentID');
     window.location.href = 'login.html';
-}
-
-function setAutoRefresh(enabled){
-  if(refreshTimer) clearInterval(refreshTimer);
-  if(enabled){
-    refreshTimer = setInterval(() => fetchGarajStatus(), 20000);
-  }
 }
 
 // ===== BUAT TEMPAHAN =====
@@ -214,7 +199,7 @@ async function bookGarage(){
 }
 
 // ===== VISUAL STATUS GARAJ =====
-async function fetchGarajStatus(isManual=false){
+async function fetchGarajStatus(){
   try {
     const res = await fetch(`${api}/garaj-status`);
     const status = await res.json();
@@ -223,11 +208,6 @@ async function fetchGarajStatus(isManual=false){
     syncSelection(latestStatus);
     boardError = '';
 
-    const timestamp = document.getElementById('lastUpdated');
-    if(timestamp){
-      const now = new Date();
-      timestamp.textContent = `Kemaskini: ${now.toLocaleTimeString('ms-MY')}${isManual ? ' (Manual)' : ''}`;
-    }
   } catch (error) {
     console.error('Gagal memuat status garaj', error);
     if(!latestStatus || latestStatus.length === 0){
@@ -404,6 +384,15 @@ function updateFilterButtons(){
 
   section.appendChild(grid);
   target.appendChild(section);
+}
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
 }
 
 function syncSelection(status){
