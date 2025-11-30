@@ -60,6 +60,11 @@ const usersRef = db.ref('users');
 const totalGaraj = 88;
 const garajPerZone = 22;
 
+function toGarajNumber(value){
+        const num = parseInt(value, 10);
+        return Number.isFinite(num) ? num : null;
+}
+
 function getGarageZone(garajNumber) {
         if (garajNumber <= garajPerZone) return 'A';
         if (garajNumber <= garajPerZone * 2) return 'B';
@@ -131,11 +136,14 @@ async function getAvailableGarage(startMonthStr, endMonthStr) {
 	const snapshot = await bookingsRef.once('value');
 	const allBookings = snapshotToArray(snapshot).filter(b => b.status === 'Approved');
 	
-	const availableGaraj = Array.from({length: totalGaraj}, (_, i) => i + 1);
-	const occupiedGaraj = new Set();
+        const availableGaraj = Array.from({length: totalGaraj}, (_, i) => i + 1);
+        const occupiedGaraj = new Set();
 	
 	allBookings.forEach(b => {
-		if (!b.garaj || !b.startMonth || !b.endMonth) return;
+                if (!b.garaj || !b.startMonth || !b.endMonth) return;
+
+                const garajNum = toGarajNumber(b.garaj);
+                if (!garajNum) return;
 		
 		try {
 			const bStart = parseDMY(b.startMonth);
@@ -145,14 +153,14 @@ async function getAvailableGarage(startMonthStr, endMonthStr) {
 			const bCheckEnd = new Date(bEnd.getFullYear(), bEnd.getMonth() + 1, 0);
 
 			if (checkStart <= bCheckEnd && checkEnd >= bCheckStart) {
-				occupiedGaraj.add(b.garaj);
-			}
-		} catch (e) {
-			console.error('Error parsing date for booking:', b.id, e);
-		}
-	});
+                                occupiedGaraj.add(garajNum);
+                        }
+                } catch (e) {
+                        console.error('Error parsing date for booking:', b.id, e);
+                }
+        });
 
-	return availableGaraj.filter(g => !occupiedGaraj.has(g));
+        return availableGaraj.filter(g => !occupiedGaraj.has(g));
 }
 
 // ===============================================
@@ -265,7 +273,8 @@ app.get('/garaj-status', async (req, res) => {
 
                 for (let i = 1; i <= totalGaraj; i++) {
                         const activeBooking = bookings.find(b => {
-                                if (b.garaj !== i) return false;
+                                const garajNum = toGarajNumber(b.garaj);
+                                if (garajNum !== i) return false;
                                 try {
                                         const bStart = parseDMY(b.startMonth);
                                         const bEnd = parseDMY(b.endMonth);
@@ -410,7 +419,8 @@ app.post('/bookings', async (req, res) => {
                 const bookings = snapshotToArray(snapshot);
 
                 const hasOverlap = bookings.some(b => {
-                        if (b.garaj !== garajNumber) return false;
+                        const existingGaraj = toGarajNumber(b.garaj);
+                        if (existingGaraj !== garajNumber) return false;
                         if (['Cancelled', 'Rejected'].includes(b.status)) return false;
                         if (!b.startMonth || !b.endMonth) return false;
 
@@ -561,10 +571,12 @@ app.post('/bookings/:id/extend', async (req, res) => {
 		
 		// Semak ketersediaan garaj yang SAMA untuk tempoh lanjutan
 		const allBookingsSnapshot = await bookingsRef.once('value');
-		const allBookings = snapshotToArray(allBookingsSnapshot).filter(b => b.id !== id && b.status === 'Approved');
-		
-		const isOverlap = allBookings.some(b => {
-			 if (!b.garaj || b.garaj !== booking.garaj) return false;
+                const allBookings = snapshotToArray(allBookingsSnapshot).filter(b => b.id !== id && b.status === 'Approved');
+
+                const isOverlap = allBookings.some(b => {
+                         const garajNum = toGarajNumber(b.garaj);
+                         const currentGarajNum = toGarajNumber(booking.garaj);
+                         if (!garajNum || garajNum !== currentGarajNum) return false;
 			 
 			 try {
 				// Tarikh tempahan sedia ada yang lain
