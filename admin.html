@@ -64,7 +64,7 @@
         return `${zone}${String(offset).padStart(2,'0')}`;
     }
 
-    function groupGarajByZone(statusList){
+  function groupGarajByZone(statusList){
         const parseGarajNumber = (g) => {
             if (g && Number.isFinite(g.garaj)) return g.garaj;
             if (g?.label && typeof g.label === 'string') {
