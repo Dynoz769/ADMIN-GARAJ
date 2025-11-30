@@ -65,16 +65,35 @@
     }
 
     function groupGarajByZone(statusList){
+        const parseGarajNumber = (g) => {
+            if (g && Number.isFinite(g.garaj)) return g.garaj;
+            if (g?.label && typeof g.label === 'string') {
+                const match = g.label.match(/([A-D])(\d{1,2})/i);
+                if (match) {
+                    const zoneLetter = match[1].toUpperCase();
+                    const offset = parseInt(match[2], 10);
+                    if (!isNaN(offset)) {
+                        return (zoneLetter.charCodeAt(0) - 65) * garajPerZone + offset;
+                    }
+                }
+            }
+            return null;
+        };
+
         const grouped = (Array.isArray(statusList) ? statusList : []).reduce((acc, g) => {
-            const zone = g.zone || getGarageZone(g.garaj);
+            const garajNumber = parseGarajNumber(g);
+            if (!garajNumber) return acc;
+
+            const zone = g.zone || getGarageZone(garajNumber);
             if (!zone) return acc;
 
             if (!acc[zone]) acc[zone] = [];
-            acc[zone].push({ ...g, zone });
+            acc[zone].push({ ...g, garaj: garajNumber, label: g.label || formatGarageLabel(garajNumber), zone });
             return acc;
         }, {});
 
-        Object.keys(grouped).forEach(zoneKey => {
+        zones.forEach(zoneKey => {
+            if (!grouped[zoneKey]) grouped[zoneKey] = [];
             grouped[zoneKey].sort((a, b) => a.garaj - b.garaj);
         });
 
