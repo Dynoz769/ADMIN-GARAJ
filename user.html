@@ -453,6 +453,15 @@ function syncSelection(status){
     document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
   }
 }
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
+}
 </script>
 </body>
 </html>

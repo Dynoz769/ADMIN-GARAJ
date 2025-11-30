@@ -4,53 +4,80 @@ const cors = require('cors'); // Menggunakan cors() tanpa konfigurasi adalah yan
 const admin = require('firebase-admin');
 
 const app = express();
-const port = process.env.PORT || 3001; 
+const port = process.env.PORT || 3001;
 
 // Konfigurasi Middleware
 app.use(bodyParser.json());
 // ✅ Menggunakan CORS lalai (membenarkan semua origin, termasuk GitHub Pages anda)
-app.use(cors()); 
+app.use(cors());
 
 // ===============================================
 // FIREBASE CONFIGURATION (BASE64 DECODING DAN URL RTDB)
 // ===============================================
 
-// Ambil kunci BASE64 yang MENGANDUNGI KESELURUHAN JSON file, disimpan sebagai FIREBASE_PRIVATE_KEY
-const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
 // URL PANGKALAN DATA (WAJIB DITETAPKAN SECARA MANUAL)
-const FIREBASE_DATABASE_URL = 'https://istem-garaj-default-rtdb.asia-southeast1.firebasedatabase.app'; 
+const FIREBASE_DATABASE_URL = process.env.FIREBASE_DATABASE_URL || 'https://istem-garaj-default-rtdb.asia-southeast1.firebasedatabase.app';
 
-let serviceAccount = null;
+function loadServiceAccount() {
+        const errors = [];
 
-if (serviceAccountBase64) {
-    try {
-        // Nyahkod dari Base64 kembali ke rentetan JSON
-        const jsonString = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
-        // Parse rentetan JSON kepada objek JavaScript
-        serviceAccount = JSON.parse(jsonString);
+        // 1) Cuba baca keseluruhan fail JSON yang disimpan sebagai Base64
+        const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY_BASE64 || process.env.FIREBASE_PRIVATE_KEY;
+        if (serviceAccountBase64) {
+                try {
+                        const jsonString = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
+                        const parsed = JSON.parse(jsonString);
+                        if (parsed.project_id && parsed.private_key && parsed.client_email) {
+                                return parsed;
+                        }
+                        errors.push('Base64 tidak mengandungi projek/privkey/email yang lengkap.');
+                } catch (e) {
+                        errors.push(`Gagal decode Base64: ${e.message}`);
+                }
+        }
 
-    } catch (e) {
-        console.error("RALAT: Gagal menyahkod Base64 atau parse JSON:", e.message);
-        // Hentikan proses jika Base64 tidak boleh dibaca atau JSON rosak
-        process.exit(1); 
-    }
+        // 2) Cuba baca rentetan JSON mentah (contoh: FIREBASE_SERVICE_ACCOUNT atau FIREBASE_SERVICE_ACCOUNT_JSON)
+        const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+        if (rawJson) {
+                try {
+                        const parsed = JSON.parse(rawJson);
+                        if (parsed.project_id && parsed.private_key && parsed.client_email) {
+                                return parsed;
+                        }
+                        errors.push('Service account JSON tidak lengkap (perlukan project_id, private_key, client_email).');
+                } catch (e) {
+                        errors.push(`Service account JSON rosak: ${e.message}`);
+                }
+        }
+
+        // 3) Cuba bina objek dari env berasingan (sesuai untuk Vercel/Render/dotenv biasa)
+        const projectId = process.env.FIREBASE_PROJECT_ID;
+        const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+        const privateKeyEnv = process.env.FIREBASE_PRIVATE_KEY_STRING || process.env.FIREBASE_PRIVATE_KEY;
+        if (projectId && clientEmail && privateKeyEnv) {
+                const privateKey = privateKeyEnv.replace(/\\n/g, '\n');
+                return { project_id: projectId, client_email: clientEmail, private_key: privateKey };
+        }
+
+        // Jika tiada konfigurasi yang sah, logkan kesalahan untuk membantu debug
+        console.error('RALAT KONFIGURASI FIREBASE:', errors.length ? errors.join(' | ') : 'Tiada pemboleh ubah persekitaran yang ditemui.');
+        return null;
 }
 
-// Semak konfigurasi asas sebelum initialize Firebase
-if (!serviceAccount || !serviceAccount.project_id || !serviceAccount.private_key) {
-    console.error("RALAT KONFIGURASI: Pemboleh ubah persekitaran Firebase tidak lengkap atau tidak sah.");
-    process.exit(1); 
+const serviceAccount = loadServiceAccount();
+
+if (!serviceAccount) {
+        throw new Error('Firebase tidak dapat dimulakan kerana konfigurasi servis akaun tiada atau tidak sah.');
 }
 
-try {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: FIREBASE_DATABASE_URL // Penambahan ini menyelesaikan ralat URL
-    });
-} catch (error) {
-    console.error("RALAT FIREBASE INITIATION:", error.message);
-    process.exit(1);
+if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
+        throw new Error('Service account Firebase wajib ada project_id, private_key dan client_email.');
 }
+
+admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: FIREBASE_DATABASE_URL
+});
 
 
 const db = admin.database();
