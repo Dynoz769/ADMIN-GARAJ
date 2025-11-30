@@ -68,9 +68,12 @@ function formatGarageLabel(garaj){
 }
 
 function groupGarajByZone(statusList){
-  const grouped = statusList.reduce((acc, g) => {
-    if (!acc[g.zone]) acc[g.zone] = [];
-    acc[g.zone].push(g);
+  const grouped = (Array.isArray(statusList) ? statusList : []).reduce((acc, g) => {
+    const zone = g.zone || getGarageZone(g.garaj);
+    if (!zone) return acc;
+
+    if (!acc[zone]) acc[zone] = [];
+    acc[zone].push({ ...g, zone });
     return acc;
   }, {});
 
