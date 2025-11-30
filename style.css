@@ -202,11 +202,15 @@ button.approve {
   background: linear-gradient(135deg, var(--color-success) 0%, #45A049 100%);
 }
 
-button.reject { 
+button.reject {
   background: linear-gradient(135deg, var(--color-danger) 0%, #E53935 100%);
 }
 
-button.delete, button.logout { 
+button.danger {
+  background: linear-gradient(135deg, #C62828 0%, #B71C1C 100%);
+}
+
+button.delete, button.logout {
   background: linear-gradient(135deg, var(--color-info) 0%, #78909C 100%);
 }
 

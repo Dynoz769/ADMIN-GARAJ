@@ -307,9 +307,9 @@ app.get('/garaj-status', async (req, res) => {
 
 // GET /bookings (Admin: Filter & Search)
 app.get('/bookings', async (req, res) => {
-	const { search, status } = req.query;
-	try {
-		const snapshot = await bookingsRef.once('value');
+        const { search, status } = req.query;
+        try {
+                const snapshot = await bookingsRef.once('value');
 		let bookings = snapshotToArray(snapshot);
 		
 		if (status) {
@@ -327,8 +327,19 @@ app.get('/bookings', async (req, res) => {
 		res.json(bookings);
 	} catch (error) {
 		console.error('Bookings list error:', error);
-		res.status(500).json([]);
-	}
+                res.status(500).json([]);
+        }
+});
+
+// DELETE /bookings (Admin: Delete all bookings)
+app.delete('/bookings', async (req, res) => {
+        try {
+                await bookingsRef.remove();
+                return res.json({ success: true, message: 'Semua tempahan berjaya dipadam.' });
+        } catch (error) {
+                console.error('Delete all bookings error:', error);
+                return res.status(500).json({ success: false, message: 'Ralat Server. Gagal memadam semua tempahan.' });
+        }
 });
 
 // GET /user-bookings (User: Filter by studentID)
