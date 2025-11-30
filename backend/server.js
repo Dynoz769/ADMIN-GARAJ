@@ -57,7 +57,21 @@ const db = admin.database();
 const bookingsRef = db.ref('bookings');
 const usersRef = db.ref('users'); 
 
-const totalGaraj = 8;
+const totalGaraj = 88;
+const garajPerZone = 22;
+
+function getGarageZone(garajNumber) {
+        if (garajNumber <= garajPerZone) return 'A';
+        if (garajNumber <= garajPerZone * 2) return 'B';
+        if (garajNumber <= garajPerZone * 3) return 'C';
+        return 'D';
+}
+
+function formatGarageLabel(garajNumber) {
+        const zone = getGarageZone(garajNumber);
+        const offset = garajNumber - ((zone.charCodeAt(0) - 65) * garajPerZone);
+        return `${zone}${String(offset).padStart(2, '0')}`;
+}
 
 // ===============================================
 // HELPER FUNCTIONS
@@ -243,22 +257,47 @@ app.post('/login', async (req, res) => {
 // ✅ GARAJ STATUS ENDPOINT	
 // ===============================================
 app.get('/garaj-status', async (req, res) => {
-	try {
-		const available = await getAvailableGarage(formatDateDMY(new Date()), formatDateDMY(new Date()));
-		const statusList = [];
-		
-		for (let i = 1; i <= totalGaraj; i++) {
-			statusList.push({
-				garaj: i,
-				occupied: !available.includes(i)
-			});
-		}
-		
-		res.json(statusList);
-	} catch (error) {
-		console.error('Garaj status error:', error);
-		res.status(500).json([]);
-	}
+        try {
+                const snapshot = await bookingsRef.once('value');
+                const bookings = snapshotToArray(snapshot).filter(b => b.status === 'Approved' && b.garaj);
+                const today = new Date();
+                const statusList = [];
+
+                for (let i = 1; i <= totalGaraj; i++) {
+                        const activeBooking = bookings.find(b => {
+                                if (b.garaj !== i) return false;
+                                try {
+                                        const bStart = parseDMY(b.startMonth);
+                                        const bEnd = parseDMY(b.endMonth);
+
+                                        const startDate = new Date(bStart.getFullYear(), bStart.getMonth(), 1);
+                                        const endDate = new Date(bEnd.getFullYear(), bEnd.getMonth() + 1, 0);
+
+                                        return today >= startDate && today <= endDate;
+                                } catch (e) {
+                                        return false;
+                                }
+                        });
+
+                        statusList.push({
+                                garaj: i,
+                                label: formatGarageLabel(i),
+                                zone: getGarageZone(i),
+                                occupied: Boolean(activeBooking),
+                                occupantName: activeBooking ? activeBooking.studentName : null,
+                                occupantID: activeBooking ? activeBooking.studentID : null,
+                                occupantStartMonth: activeBooking ? activeBooking.startMonth : null,
+                                occupantEndMonth: activeBooking ? activeBooking.endMonth : null,
+                                occupantDuration: activeBooking ? activeBooking.duration : null,
+                                occupantMessage: activeBooking ? activeBooking.message : null
+                        });
+                }
+
+                res.json(statusList);
+        } catch (error) {
+                console.error('Garaj status error:', error);
+                res.status(500).json([]);
+        }
 });
 
 
@@ -268,9 +307,9 @@ app.get('/garaj-status', async (req, res) => {
 
 // GET /bookings (Admin: Filter & Search)
 app.get('/bookings', async (req, res) => {
-	const { search, status } = req.query;
-	try {
-		const snapshot = await bookingsRef.once('value');
+        const { search, status } = req.query;
+        try {
+                const snapshot = await bookingsRef.once('value');
 		let bookings = snapshotToArray(snapshot);
 		
 		if (status) {
@@ -288,8 +327,19 @@ app.get('/bookings', async (req, res) => {
 		res.json(bookings);
 	} catch (error) {
 		console.error('Bookings list error:', error);
-		res.status(500).json([]);
-	}
+                res.status(500).json([]);
+        }
+});
+
+// DELETE /bookings (Admin: Delete all bookings)
+app.delete('/bookings', async (req, res) => {
+        try {
+                await bookingsRef.remove();
+                return res.json({ success: true, message: 'Semua tempahan berjaya dipadam.' });
+        } catch (error) {
+                console.error('Delete all bookings error:', error);
+                return res.status(500).json({ success: false, message: 'Ralat Server. Gagal memadam semua tempahan.' });
+        }
 });
 
 // GET /user-bookings (User: Filter by studentID)
