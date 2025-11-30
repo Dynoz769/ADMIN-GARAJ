@@ -285,7 +285,11 @@ app.get('/garaj-status', async (req, res) => {
                                 zone: getGarageZone(i),
                                 occupied: Boolean(activeBooking),
                                 occupantName: activeBooking ? activeBooking.studentName : null,
-                                occupantID: activeBooking ? activeBooking.studentID : null
+                                occupantID: activeBooking ? activeBooking.studentID : null,
+                                occupantStartMonth: activeBooking ? activeBooking.startMonth : null,
+                                occupantEndMonth: activeBooking ? activeBooking.endMonth : null,
+                                occupantDuration: activeBooking ? activeBooking.duration : null,
+                                occupantMessage: activeBooking ? activeBooking.message : null
                         });
                 }
 
