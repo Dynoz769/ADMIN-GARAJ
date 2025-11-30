@@ -9,47 +9,148 @@
 <body>
 <header>User Dashboard - Tempahan Garaj</header>
 <div class="container">
-  
-  <h3>Status Garaj</h3>
-  <div class="garaj-container" id="garajContainer">
+
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Pilih garaj sendiri</p>
+      <h1>Tempah serta-merta, garaj terus merah</h1>
+      <p class="lede">Tekan zon untuk buka 22 garaj. Tapis ikut status atau cari nama/ID, pilih lot hijau, isi maklumat, dan slot akan disahkan serta-merta dengan warna merah.</p>
+    </div>
+    <div class="hero-actions">
+      <button class="logout" onclick="logout()">Logout</button>
+    </div>
+  </section>
+
+    <div class="layout-grid">
+      <div>
+        <h3>Status Garaj</h3>
+        <div class="board-controls">
+          <div class="legend">
+            <span class="legend-pill occupied-pill">Penuh</span>
+            <span class="legend-pill available-pill">Kosong</span>
+          </div>
+        <div class="control-note">
+          <div>Status papan terus dikemas kini apabila anda membuka halaman.</div>
+          <div id="lastUpdated" class="muted-text"></div>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="chip-group">
+          <button class="filter-chip active" data-filter="all" onclick="setFilter('all')">Semua</button>
+          <button class="filter-chip" data-filter="available" onclick="setFilter('available')">Kosong sahaja</button>
+          <button class="filter-chip" data-filter="occupied" onclick="setFilter('occupied')">Penuh sahaja</button>
+        </div>
+        <div class="search-box">
+          <input type="text" placeholder="Cari nama, ID, zon atau label" oninput="setSearch(this.value)">
+        </div>
+      </div>
+      <div class="garaj-container" id="garajContainer"></div>
     </div>
 
-  <h3>Buat Tempahan Garaj</h3>
-  <input type="text" id="name" placeholder="Nama">
-  <input type="text" id="idNo" placeholder="No Matrik">
-  <input type="month" id="startMonth">
-  <select id="duration">
-    <option value="1">1 Bulan</option>
-    <option value="3">3 Bulan</option>
-    <option value="6">6 Bulan</option>
-    <option value="12">1 Tahun</option>
-  </select>
-  <button onclick="bookGarage()">Tempah</button>
-  <button onclick="logout()">Logout</button>
-
-  <h3>Senarai Tempahan Anda</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>ID Tempahan</th>
-        <th>Nama</th>
-        <th>No Matrik</th>
-        <th>Bulan Mula</th>
-        <th>Bulan Tamat</th>
-        <th>Tempoh</th>
-        <th>Garaj</th>
-        <th>Status</th>
-        <th>Mesej</th>
-        <th>Tindakan</th>
-      </tr>
-    </thead>
-    <tbody id="bookingTable"></tbody>
-  </table>
+    <div class="card form-card">
+      <h3>Tempah Garaj</h3>
+      <p class="eyebrow">Pilih lot terlebih dahulu</p>
+      <div class="selected-garaj" id="selectedGarage">Tiada garaj dipilih</div>
+      <div class="form-grid">
+        <input type="text" id="name" placeholder="Nama">
+        <input type="text" id="idNo" placeholder="No Matrik">
+        <input type="month" id="startMonth">
+        <select id="duration">
+          <option value="1">1 Bulan</option>
+          <option value="3">3 Bulan</option>
+          <option value="6">6 Bulan</option>
+          <option value="12">1 Tahun</option>
+        </select>
+      </div>
+      <button class="book" onclick="bookGarage()">Tempah Sekarang</button>
+    </div>
+  </div>
 </div>
 
 <script>
 const api = "https://admin-garaj-1.onrender.com";
+const totalGaraj = 88;
+const garajPerZone = 22;
+const zones = ['A','B','C','D'];
 let username = localStorage.getItem('username');
+let latestStatus = [];
+let selectedGarage = null;
+let groupedCache = {};
+let filterStatus = 'all';
+let searchTerm = '';
+let boardError = '';
+const STATUS_CACHE_KEY = 'userStatusCache';
+
+function buildEmptyStatus(){
+  return Array.from({length: totalGaraj}, (_,i) => {
+    const garajNum = i + 1;
+    return {
+      garaj: garajNum,
+      zone: getGarageZone(garajNum),
+      label: formatGarageLabel(garajNum),
+      occupied: false
+    };
+  });
+}
+
+function ensureAllGarages(statusList){
+  const base = buildEmptyStatus();
+  const mapped = new Map((Array.isArray(statusList) ? statusList : []).map(item => {
+    const num = Number(item.garaj);
+    return [num, { ...item, garaj: num, zone: item.zone || getGarageZone(num), label: item.label || formatGarageLabel(num) }];
+  }));
+
+  return base.map(empty => mapped.get(empty.garaj) || empty);
+}
+
+function getGarageZone(garaj){
+  if (garaj <= garajPerZone) return 'A';
+  if (garaj <= garajPerZone * 2) return 'B';
+  if (garaj <= garajPerZone * 3) return 'C';
+  return 'D';
+}
+
+function formatGarageLabel(garaj){
+  const zone = getGarageZone(garaj);
+  const offset = garaj - ((zone.charCodeAt(0) - 65) * garajPerZone);
+  return `${zone}${String(offset).padStart(2,'0')}`;
+}
+
+function groupGarajByZone(statusList){
+  const parseGarajNumber = (g) => {
+    if (g && Number.isFinite(g.garaj)) return g.garaj;
+    if (g?.label && typeof g.label === 'string') {
+      const match = g.label.match(/([A-D])(\d{1,2})/i);
+      if (match) {
+        const zoneLetter = match[1].toUpperCase();
+        const offset = parseInt(match[2], 10);
+        if (!isNaN(offset)) {
+          return (zoneLetter.charCodeAt(0) - 65) * garajPerZone + offset;
+        }
+      }
+    }
+    return null;
+  };
+
+  const grouped = (Array.isArray(statusList) ? statusList : []).reduce((acc, g) => {
+    const garajNumber = parseGarajNumber(g);
+    if (!garajNumber) return acc;
+
+    const zone = g.zone || getGarageZone(garajNumber);
+    if (!zone) return acc;
+
+    if (!acc[zone]) acc[zone] = [];
+    acc[zone].push({ ...g, garaj: garajNumber, label: g.label || formatGarageLabel(garajNumber), zone });
+    return acc;
+  }, {});
+
+  zones.forEach(zoneKey => {
+    if (!grouped[zoneKey]) grouped[zoneKey] = [];
+    grouped[zoneKey].sort((a, b) => a.garaj - b.garaj);
+  });
+
+  return grouped;
+}
 
 // Semak Autentikasi Pengguna
 document.addEventListener('DOMContentLoaded', () => {
@@ -58,136 +159,280 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Sila login untuk mengakses dashboard pengguna.');
         window.location.href = 'login.html';
     }
-    fetchBookings();
+    updateFilterButtons();
+    const cached = loadCachedStatus();
+    latestStatus = ensureAllGarages(cached?.data || latestStatus);
+    groupedCache = groupGarajByZone(latestStatus);
+    renderLastUpdated(cached?.updatedAt);
+    renderBoard();
     fetchGarajStatus();
 });
 
 function logout() {
     localStorage.removeItem('username');
     localStorage.removeItem('role');
-    localStorage.removeItem('studentID'); 
+    localStorage.removeItem('studentID');
     window.location.href = 'login.html';
 }
 
-// ===== BUAT TEMPAHAN (DIKEMASKINI) =====
+// ===== BUAT TEMPAHAN =====
 async function bookGarage(){
   const studentName = document.getElementById('name').value;
-  let studentID = document.getElementById('idNo').value || localStorage.getItem('studentID'); // Ambil dari input atau localStorage
+  let studentID = document.getElementById('idNo').value || localStorage.getItem('studentID');
   const startMonth = document.getElementById('startMonth').value;
   const duration = document.getElementById('duration').value;
 
+  if (!selectedGarage) return alert('Sila pilih garaj berwarna hijau dahulu.');
   if(!studentName || !studentID || !startMonth || !duration) return alert('Sila lengkapkan semua maklumat!');
 
-  // ✅ PEMBETULAN ENDPOINT: Menghantar username ke server
-  const res = await fetch(`${api}/bookings`,{ 
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    // Pastikan username dihantar dalam body
-    body:JSON.stringify({username,studentName,studentID,startMonth,duration})
+    const res = await fetch(`${api}/bookings`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username,studentName,studentID,startMonth,duration,garaj:selectedGarage.garaj})
   });
-  
-  const data = await res.json(); 
-  
-  alert(data.message);
-  
-  fetchBookings(); 
-  fetchGarajStatus();
-}
 
-// ===== FETCH TEMPAHAN PENGGUNA (DIKEMASKINI) =====
-async function fetchBookings(){
-  // ✅ PENTING: Menggunakan laluan yang baru ditambah di server.js
-  const res = await fetch(`${api}/bookings/history/${username}`); 
-  
-  if (!res.ok) {
-     console.error('API Error Status:', res.status);
-     return;
-  }
-  
   const data = await res.json();
-  const tbody = document.getElementById('bookingTable');
-  tbody.innerHTML='';
-  
-  if (data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Tiada tempahan ditemui.</td></tr>';
-      return; 
+
+  alert(data.message);
+
+  if (res.ok) {
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+    document.getElementById('startMonth').value = '';
   }
 
-  data.sort((a, b) => {
-    const statusOrder = { 'Pending': 1, 'Approved': 2, 'Rejected': 3, 'Cancelled': 4 };
-    return statusOrder[a.status] - statusOrder[b.status];
-  });
-
-  data.forEach(b=>{
-    const tr = document.createElement('tr');
-    
-    const canExtend = b.status === 'Approved';
-    const canCancel = b.status === 'Approved' || b.status === 'Pending';
-    
-    tr.innerHTML=`
-      <td>${b.id}</td>
-      <td>${b.studentName}</td>
-      <td>${b.studentID}</td>
-      <td>${b.startMonth}</td>
-      <td>${b.endMonth}</td>
-      <td>${b.duration}</td>
-      <td>${b.garaj||'--'}</td>
-      <td>${b.status}</td>
-      <td>${b.message}</td>
-      <td>
-        ${canExtend ? `<button onclick="extendBooking('${b.id}')">Lanjut</button>` : ''}
-        ${canCancel ? `<button onclick="cancelBooking('${b.id}')" class="cancel-btn">Batal</button>` : ''}
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-// ===== LANJUTKAN TEMPAHAN (EXTEND) =====
-async function extendBooking(id){
-  const extra = prompt('Masukkan bilangan bulan tambahan:');
-  if(!extra || isNaN(parseInt(extra)) || parseInt(extra) <= 0) return alert('Sila masukkan nombor bulan yang sah.');
-  
-  const res = await fetch(`${api}/bookings/${id}/extend`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({extra:parseInt(extra)})
-  });
-  const data = await res.json();
-  alert(data.message);
-  fetchBookings();
   fetchGarajStatus();
-}
-
-// ===== BATALKAN TEMPAHAN (CANCEL) =====
-async function cancelBooking(id){
-  if(!confirm("Adakah anda pasti mahu membatalkan tempahan ini?")) return;
-
-  const res = await fetch(`${api}/bookings/${id}/cancel`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-  });
-  const data = await res.json();
-  alert(data.message);
-  fetchBookings();
-  fetchGarajStatus(); 
 }
 
 // ===== VISUAL STATUS GARAJ =====
 async function fetchGarajStatus(){
-  const res = await fetch(`${api}/garaj-status`);
-  const status = await res.json();
+  try {
+    const res = await fetch(`${api}/garaj-status`);
+    const status = await res.json();
+    latestStatus = ensureAllGarages(status);
+    groupedCache = groupGarajByZone(latestStatus);
+    syncSelection(latestStatus);
+    cacheStatus(latestStatus);
+    boardError = '';
+
+  } catch (error) {
+    console.error('Gagal memuat status garaj', error);
+    if(!latestStatus || latestStatus.length === 0){
+      latestStatus = buildEmptyStatus();
+      groupedCache = groupGarajByZone(latestStatus);
+    } else {
+      latestStatus = ensureAllGarages(latestStatus);
+      groupedCache = groupGarajByZone(latestStatus);
+    }
+    boardError = 'Gagal memuat status terkini. Paparan menunjukkan data kosong.';
+  }
+
   const container = document.getElementById('garajContainer');
+  if(container) container.innerHTML='';
+
+  renderLastUpdated();
+  renderBoard();
+}
+
+function renderBoard(){
+  const container = document.getElementById('garajContainer');
+  if(!container) return;
   container.innerHTML='';
 
-  status.forEach(g=>{
-    const div = document.createElement('div');
-    const garajText = g.occupied ? `Garaj ${g.garaj}<br>(Penuh)` : `Garaj ${g.garaj}<br>(Kosong)`;
-    
-    div.className = `garaj ${g.occupied ? 'occupied' : 'available'}`;
-    div.innerHTML = garajText;
-    container.appendChild(div);
+  if(boardError){
+    const notice = document.createElement('div');
+    notice.className = 'board-error';
+    notice.textContent = boardError;
+    container.appendChild(notice);
+  }
+
+  let activeZone = container.dataset.activeZone || zones[0];
+  if(!zones.includes(activeZone)) activeZone = zones[0];
+  container.dataset.activeZone = activeZone;
+
+  const normalizedStatus = ensureAllGarages(latestStatus);
+  if (!groupedCache || !Object.keys(groupedCache).length) {
+    groupedCache = groupGarajByZone(normalizedStatus);
+  }
+
+  const grouped = groupedCache;
+
+  const zoneNav = document.createElement('div');
+  zoneNav.className = 'zone-nav';
+
+  const zoneSummaries = zones.map(zone => {
+    const zoneList = grouped[zone] || [];
+    const occupiedCount = zoneList.filter(g => g.occupied).length;
+    return {
+      zone,
+      occupiedCount,
+      availableCount: garajPerZone - occupiedCount,
+    };
   });
+
+  zoneSummaries.forEach(({ zone, occupiedCount, availableCount }) => {
+    const btn = document.createElement('button');
+    btn.className = `zone-pill ${activeZone === zone ? 'active' : ''}`;
+    btn.dataset.zone = zone;
+    btn.setAttribute('aria-label', `Zone ${zone}, ${occupiedCount} penuh, ${availableCount} kosong`);
+    btn.innerHTML = `
+      <div class="zone-pill-row">
+        <div class="zone-label">Zone ${zone}</div>
+        <span class="zone-dot ${availableCount ? 'available-dot' : 'full-dot'}"></span>
+      </div>
+      <div class="zone-pill-stats">
+        <span class="zone-available">${availableCount} kosong</span>
+        <span class="zone-occupied">${occupiedCount} penuh</span>
+      </div>
+    `;
+    btn.onclick = () => {
+      container.dataset.activeZone = zone;
+      renderZone(zone, grouped, contentWrapper);
+      [...zoneNav.children].forEach(child => child.classList.toggle('active', child.dataset.zone === zone));
+    };
+    zoneNav.appendChild(btn);
+  });
+
+  const contentWrapper = document.createElement('div');
+  renderZone(activeZone, grouped, contentWrapper);
+
+  container.appendChild(zoneNav);
+  container.appendChild(contentWrapper);
+}
+
+function filterGaraj(list){
+  const term = (searchTerm || '').toLowerCase().trim();
+  return list.filter(g => {
+    if(filterStatus === 'available' && g.occupied) return false;
+    if(filterStatus === 'occupied' && !g.occupied) return false;
+    if(term){
+      const fields = [g.label, g.zone, g.occupantName, g.occupantID, g.occupantMessage];
+      const matches = fields.some(f => f && f.toString().toLowerCase().includes(term));
+      if(!matches) return false;
+    }
+    return true;
+  });
+}
+
+function renderZone(zone, grouped, target){
+  const fullZoneList = grouped[zone] || [];
+  const zoneData = filterGaraj(fullZoneList);
+  target.innerHTML = '';
+
+  const section = document.createElement('div');
+  section.className = 'zone-section';
+
+  const title = document.createElement('div');
+  title.className = 'zone-header';
+  const occupiedCount = fullZoneList.filter(g => g.occupied).length;
+  const availableCount = garajPerZone - occupiedCount;
+  title.innerHTML = `<div><p class="eyebrow">${occupiedCount} penuh · ${availableCount} kosong</p><h4>Zone ${zone} - ${garajPerZone} Garaj</h4></div>`;
+  section.appendChild(title);
+
+  const grid = document.createElement('div');
+  grid.className = 'garaj-grid';
+
+  if(zoneData.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'empty-zone';
+    empty.textContent = 'Tiada garaj padan dengan tapisan ini.';
+    section.appendChild(empty);
+    target.appendChild(section);
+    return;
+  }
+
+  zoneData.forEach(g => {
+    const div = document.createElement('div');
+    const isSelected = selectedGarage && selectedGarage.garaj === g.garaj;
+    div.className = `garaj ${g.occupied ? 'occupied' : 'available'} ${isSelected ? 'selected' : ''}`;
+
+    const occupantInfo = g.occupied ? `
+      <div class="garaj-info">Nama: <span>${g.occupantName || 'Tidak diketahui'}</span></div>
+      <div class="garaj-info">ID: <span>${g.occupantID || '-'}</span></div>
+      <div class="garaj-info">Bulan Mula: <span>${g.occupantStartMonth || '-'}</span></div>
+      <div class="garaj-info">Bulan Tamat: <span>${g.occupantEndMonth || '-'}</span></div>
+      <div class="garaj-info">Tempoh: <span>${g.occupantDuration ? g.occupantDuration + ' bulan' : '-'}</span></div>
+      <div class="garaj-info">Mesej: <span>${g.occupantMessage || '-'}</span></div>
+    ` : '<div class="garaj-info empty">Tiada penyewa</div>';
+
+    div.innerHTML = `
+      <div class="garaj-label-row">
+        <div class="garaj-label">${g.label}</div>
+        <div class="garaj-status">${g.occupied ? 'Penuh' : 'Kosong'}</div>
+      </div>
+      <div class="garaj-body">
+        ${occupantInfo}
+      </div>
+    `;
+
+    if (!g.occupied) {
+      div.onclick = () => {
+        selectedGarage = g;
+        document.getElementById('selectedGarage').textContent = `Garaj dipilih: ${g.label} (Zone ${g.zone})`;
+        renderZone(zone, grouped, target);
+      };
+    }
+    grid.appendChild(div);
+  });
+
+  section.appendChild(grid);
+  target.appendChild(section);
+}
+
+function setFilter(status){
+  filterStatus = status;
+  updateFilterButtons();
+  renderBoard();
+}
+
+function setSearch(value){
+  searchTerm = value || '';
+  renderBoard();
+}
+
+function updateFilterButtons(){
+  document.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filterStatus);
+  });
+}
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
+}
+
+function cacheStatus(data){
+  const payload = { updatedAt: Date.now(), data };
+  localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify(payload));
+  renderLastUpdated(payload.updatedAt);
+}
+
+function loadCachedStatus(){
+  try {
+    const raw = localStorage.getItem(STATUS_CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(parsed && Array.isArray(parsed.data)) return parsed;
+  } catch(e){
+    console.warn('Tidak dapat memuat cache status', e);
+  }
+  return null;
+}
+
+function renderLastUpdated(timestamp){
+  const node = document.getElementById('lastUpdated');
+  if(!node) return;
+  const ts = timestamp || JSON.parse(localStorage.getItem(STATUS_CACHE_KEY) || '{}').updatedAt;
+  if(!ts){
+    node.textContent = 'Menunggu status terkini...';
+    return;
+  }
+  const date = new Date(ts);
+  node.textContent = `Dikemas kini ${date.toLocaleString('ms-MY')}`;
 }
 </script>
 </body>

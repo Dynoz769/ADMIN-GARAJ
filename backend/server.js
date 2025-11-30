@@ -4,60 +4,106 @@ const cors = require('cors'); // Menggunakan cors() tanpa konfigurasi adalah yan
 const admin = require('firebase-admin');
 
 const app = express();
-const port = process.env.PORT || 3001; 
+const port = process.env.PORT || 3001;
 
 // Konfigurasi Middleware
 app.use(bodyParser.json());
 // ✅ Menggunakan CORS lalai (membenarkan semua origin, termasuk GitHub Pages anda)
-app.use(cors()); 
+app.use(cors());
 
 // ===============================================
 // FIREBASE CONFIGURATION (BASE64 DECODING DAN URL RTDB)
 // ===============================================
 
-// Ambil kunci BASE64 yang MENGANDUNGI KESELURUHAN JSON file, disimpan sebagai FIREBASE_PRIVATE_KEY
-const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
 // URL PANGKALAN DATA (WAJIB DITETAPKAN SECARA MANUAL)
-const FIREBASE_DATABASE_URL = 'https://istem-garaj-default-rtdb.asia-southeast1.firebasedatabase.app'; 
+const FIREBASE_DATABASE_URL = process.env.FIREBASE_DATABASE_URL || 'https://istem-garaj-default-rtdb.asia-southeast1.firebasedatabase.app';
 
-let serviceAccount = null;
+function loadServiceAccount() {
+        const errors = [];
 
-if (serviceAccountBase64) {
-    try {
-        // Nyahkod dari Base64 kembali ke rentetan JSON
-        const jsonString = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
-        // Parse rentetan JSON kepada objek JavaScript
-        serviceAccount = JSON.parse(jsonString);
+        // 1) Cuba baca keseluruhan fail JSON yang disimpan sebagai Base64
+        const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY_BASE64 || process.env.FIREBASE_PRIVATE_KEY;
+        if (serviceAccountBase64) {
+                try {
+                        const jsonString = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
+                        const parsed = JSON.parse(jsonString);
+                        if (parsed.project_id && parsed.private_key && parsed.client_email) {
+                                return parsed;
+                        }
+                        errors.push('Base64 tidak mengandungi projek/privkey/email yang lengkap.');
+                } catch (e) {
+                        errors.push(`Gagal decode Base64: ${e.message}`);
+                }
+        }
 
-    } catch (e) {
-        console.error("RALAT: Gagal menyahkod Base64 atau parse JSON:", e.message);
-        // Hentikan proses jika Base64 tidak boleh dibaca atau JSON rosak
-        process.exit(1); 
-    }
+        // 2) Cuba baca rentetan JSON mentah (contoh: FIREBASE_SERVICE_ACCOUNT atau FIREBASE_SERVICE_ACCOUNT_JSON)
+        const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+        if (rawJson) {
+                try {
+                        const parsed = JSON.parse(rawJson);
+                        if (parsed.project_id && parsed.private_key && parsed.client_email) {
+                                return parsed;
+                        }
+                        errors.push('Service account JSON tidak lengkap (perlukan project_id, private_key, client_email).');
+                } catch (e) {
+                        errors.push(`Service account JSON rosak: ${e.message}`);
+                }
+        }
+
+        // 3) Cuba bina objek dari env berasingan (sesuai untuk Vercel/Render/dotenv biasa)
+        const projectId = process.env.FIREBASE_PROJECT_ID;
+        const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+        const privateKeyEnv = process.env.FIREBASE_PRIVATE_KEY_STRING || process.env.FIREBASE_PRIVATE_KEY;
+        if (projectId && clientEmail && privateKeyEnv) {
+                const privateKey = privateKeyEnv.replace(/\\n/g, '\n');
+                return { project_id: projectId, client_email: clientEmail, private_key: privateKey };
+        }
+
+        // Jika tiada konfigurasi yang sah, logkan kesalahan untuk membantu debug
+        console.error('RALAT KONFIGURASI FIREBASE:', errors.length ? errors.join(' | ') : 'Tiada pemboleh ubah persekitaran yang ditemui.');
+        return null;
 }
 
-// Semak konfigurasi asas sebelum initialize Firebase
-if (!serviceAccount || !serviceAccount.project_id || !serviceAccount.private_key) {
-    console.error("RALAT KONFIGURASI: Pemboleh ubah persekitaran Firebase tidak lengkap atau tidak sah.");
-    process.exit(1); 
+const serviceAccount = loadServiceAccount();
+
+if (!serviceAccount) {
+        throw new Error('Firebase tidak dapat dimulakan kerana konfigurasi servis akaun tiada atau tidak sah.');
 }
 
-try {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: FIREBASE_DATABASE_URL // Penambahan ini menyelesaikan ralat URL
-    });
-} catch (error) {
-    console.error("RALAT FIREBASE INITIATION:", error.message);
-    process.exit(1);
+if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
+        throw new Error('Service account Firebase wajib ada project_id, private_key dan client_email.');
 }
+
+admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: FIREBASE_DATABASE_URL
+});
 
 
 const db = admin.database();
 const bookingsRef = db.ref('bookings');
 const usersRef = db.ref('users'); 
 
-const totalGaraj = 8;
+const totalGaraj = 88;
+const garajPerZone = 22;
+
+function toGarajNumber(value){
+        const num = parseInt(value, 10);
+        return Number.isFinite(num) ? num : null;
+}
+
+function getGarageZone(garajNumber) {
+        if (garajNumber <= garajPerZone) return 'A';
+        if (garajNumber <= garajPerZone * 2) return 'B';
+        if (garajNumber <= garajPerZone * 3) return 'C';
+        return 'D';
+}
+
+function formatGarageLabel(garajNumber) {
+        const zone = getGarageZone(garajNumber);
+        const offset = garajNumber - ((zone.charCodeAt(0) - 65) * garajPerZone);
+        return `${zone}${String(offset).padStart(2, '0')}`;
+}
 
 // ===============================================
 // HELPER FUNCTIONS
@@ -117,11 +163,14 @@ async function getAvailableGarage(startMonthStr, endMonthStr) {
 	const snapshot = await bookingsRef.once('value');
 	const allBookings = snapshotToArray(snapshot).filter(b => b.status === 'Approved');
 	
-	const availableGaraj = Array.from({length: totalGaraj}, (_, i) => i + 1);
-	const occupiedGaraj = new Set();
+        const availableGaraj = Array.from({length: totalGaraj}, (_, i) => i + 1);
+        const occupiedGaraj = new Set();
 	
 	allBookings.forEach(b => {
-		if (!b.garaj || !b.startMonth || !b.endMonth) return;
+                if (!b.garaj || !b.startMonth || !b.endMonth) return;
+
+                const garajNum = toGarajNumber(b.garaj);
+                if (!garajNum) return;
 		
 		try {
 			const bStart = parseDMY(b.startMonth);
@@ -131,14 +180,14 @@ async function getAvailableGarage(startMonthStr, endMonthStr) {
 			const bCheckEnd = new Date(bEnd.getFullYear(), bEnd.getMonth() + 1, 0);
 
 			if (checkStart <= bCheckEnd && checkEnd >= bCheckStart) {
-				occupiedGaraj.add(b.garaj);
-			}
-		} catch (e) {
-			console.error('Error parsing date for booking:', b.id, e);
-		}
-	});
+                                occupiedGaraj.add(garajNum);
+                        }
+                } catch (e) {
+                        console.error('Error parsing date for booking:', b.id, e);
+                }
+        });
 
-	return availableGaraj.filter(g => !occupiedGaraj.has(g));
+        return availableGaraj.filter(g => !occupiedGaraj.has(g));
 }
 
 // ===============================================
@@ -149,6 +198,20 @@ app.get('/', (req, res) => {
         message: "Selamat datang ke API Pengurusan Garaj! API ini berfungsi dengan baik.",
         endpoints: ["/login", "/bookings", "/analytics", "/garaj-status", "/export/csv"]
     });
+});
+
+// ===============================================
+// ✅ FIREBASE HEALTHCHECK
+// ===============================================
+app.get('/health/firebase', async (req, res) => {
+        try {
+                const offsetSnap = await db.ref('.info/serverTimeOffset').once('value');
+                const offset = offsetSnap.val() || 0;
+                res.status(200).json({ ok: true, offset });
+        } catch (error) {
+                console.error('Firebase healthcheck failed:', error);
+                res.status(500).json({ ok: false, message: 'Firebase tidak dapat dihubungi.' });
+        }
 });
 
 // ===============================================
@@ -243,22 +306,49 @@ app.post('/login', async (req, res) => {
 // ✅ GARAJ STATUS ENDPOINT	
 // ===============================================
 app.get('/garaj-status', async (req, res) => {
-	try {
-		const available = await getAvailableGarage(formatDateDMY(new Date()), formatDateDMY(new Date()));
-		const statusList = [];
-		
-		for (let i = 1; i <= totalGaraj; i++) {
-			statusList.push({
-				garaj: i,
-				occupied: !available.includes(i)
-			});
-		}
-		
-		res.json(statusList);
-	} catch (error) {
-		console.error('Garaj status error:', error);
-		res.status(500).json([]);
-	}
+        try {
+                const snapshot = await bookingsRef.once('value');
+                const bookings = snapshotToArray(snapshot).filter(b => b.garaj && !['Cancelled', 'Rejected'].includes(b.status));
+                const today = new Date();
+                const statusList = [];
+
+                for (let i = 1; i <= totalGaraj; i++) {
+                        const activeBooking = bookings.find(b => {
+                                const garajNum = toGarajNumber(b.garaj);
+                                if (garajNum !== i) return false;
+                                try {
+                                        const bStart = parseDMY(b.startMonth);
+                                        const bEnd = parseDMY(b.endMonth);
+
+                                        const startDate = new Date(bStart.getFullYear(), bStart.getMonth(), 1);
+                                        const endDate = new Date(bEnd.getFullYear(), bEnd.getMonth() + 1, 0);
+
+                                        // Tanda merah segera jika tempahan masih sah atau akan bermula
+                                        return today <= endDate;
+                                } catch (e) {
+                                        return false;
+                                }
+                        });
+
+                        statusList.push({
+                                garaj: i,
+                                label: formatGarageLabel(i),
+                                zone: getGarageZone(i),
+                                occupied: Boolean(activeBooking),
+                                occupantName: activeBooking ? activeBooking.studentName : null,
+                                occupantID: activeBooking ? activeBooking.studentID : null,
+                                occupantStartMonth: activeBooking ? activeBooking.startMonth : null,
+                                occupantEndMonth: activeBooking ? activeBooking.endMonth : null,
+                                occupantDuration: activeBooking ? activeBooking.duration : null,
+                                occupantMessage: activeBooking ? activeBooking.message : null
+                        });
+                }
+
+                res.json(statusList);
+        } catch (error) {
+                console.error('Garaj status error:', error);
+                res.status(500).json([]);
+        }
 });
 
 
@@ -266,123 +356,142 @@ app.get('/garaj-status', async (req, res) => {
 // ✅ BOOKING ENDPOINTS	
 // ===============================================
 
-// GET /bookings (Admin: Filter & Search)
+// GET /bookings (Admin: Filter & Search) — legacy support only
 app.get('/bookings', async (req, res) => {
-	const { search, status } = req.query;
-	try {
-		const snapshot = await bookingsRef.once('value');
-		let bookings = snapshotToArray(snapshot);
-		
-		if (status) {
-			bookings = bookings.filter(b => b.status === status);
-		}
-		
-		if (search) {
-			const searchTerm = search.toLowerCase();
-			bookings = bookings.filter(b =>	
-				b.studentName.toLowerCase().includes(searchTerm) ||
-				b.studentID.toLowerCase().includes(searchTerm)
-			);
-		}
-		
-		res.json(bookings);
-	} catch (error) {
-		console.error('Bookings list error:', error);
-		res.status(500).json([]);
-	}
+        const { search, status } = req.query;
+        try {
+                const snapshot = await bookingsRef.once('value');
+                let bookings = snapshotToArray(snapshot);
+
+                if (status) {
+                        bookings = bookings.filter(b => b.status === status);
+                }
+
+                if (search) {
+                        const searchTerm = search.toLowerCase();
+                        bookings = bookings.filter(b =>
+                                b.studentName.toLowerCase().includes(searchTerm) ||
+                                b.studentID.toLowerCase().includes(searchTerm)
+                        );
+                }
+
+                res.json(bookings);
+        } catch (error) {
+                console.error('Bookings list error:', error);
+                res.status(500).json([]);
+        }
 });
 
-// GET /user-bookings (User: Filter by studentID)
+// GET /user-bookings (User: Filter by studentID) — legacy support only
 app.get('/user-bookings', async (req, res) => {
-	const { studentID } = req.query;
-	if (!studentID) {
-		return res.status(400).json({ success: false, message: 'Student ID diperlukan.' });
-	}
+        const { studentID } = req.query;
+        if (!studentID) {
+                return res.status(400).json({ success: false, message: 'Student ID diperlukan.' });
+        }
 
-	try {
-		const snapshot = await bookingsRef.once('value');
-		let bookings = snapshotToArray(snapshot);
-		
-		bookings = bookings.filter(b => b.studentID === studentID);
-		
-		res.json(bookings);
-	} catch (error) {
-		console.error('User bookings list error:', error);
-		res.status(500).json([]);
-	}
+        try {
+                const snapshot = await bookingsRef.once('value');
+                let bookings = snapshotToArray(snapshot);
+
+                bookings = bookings.filter(b => b.studentID === studentID);
+
+                res.json(bookings);
+        } catch (error) {
+                console.error('User bookings list error:', error);
+                res.status(500).json([]);
+        }
 });
 
-// ✅ Laluan untuk user.html mendapatkan senarai tempahan
-// GET /bookings/history/:username	
+// ✅ Laluan untuk user.html mendapatkan senarai tempahan — tidak lagi digunakan tetapi dikekalkan
+// GET /bookings/history/:username
 app.get('/bookings/history/:username', async (req, res) => {
-	const { username } = req.params;
-	try {
-		const snapshot = await bookingsRef.once('value');
-		let bookings = snapshotToArray(snapshot);
-		
-		bookings = bookings.filter(b => b.username === username);	
-		
-		res.json(bookings);
-	} catch (error) {
-		console.error('User history error:', error);
-		res.status(500).json([]);
-	}
+        const { username } = req.params;
+        try {
+                const snapshot = await bookingsRef.once('value');
+                let bookings = snapshotToArray(snapshot);
+
+                bookings = bookings.filter(b => b.username === username);
+
+                res.json(bookings);
+        } catch (error) {
+                console.error('User history error:', error);
+                res.status(500).json([]);
+        }
 });
 
 
-// POST /bookings (User: Create booking)
+// POST /bookings (User: Create booking with explicit garage selection)
 app.post('/bookings', async (req, res) => {
-	const { username, studentName, studentID, startMonth, duration } = req.body;	
-	
-	if (!studentName || !studentID || !startMonth || !duration || !username) {
-		return res.status(400).json({ success: false, message: 'Sila isi semua ruangan yang wajib.' });
-	}
-	
-	const durationMonths = parseInt(duration);
-	
-	try {
-		// Asumsi startMonth dalam format YYYY-MM
-		const startDate = parseDMY(`01/${startMonth.substring(5, 7)}/${startMonth.substring(0, 4)}`);
-		
-		// Menentukan endMonth: Tambah tempoh (durationMonths) ke bulan mula (startDate.getMonth()),
-		// dan dapatkan hari terakhir bulan tersebut (hari 0 bulan seterusnya)
-		const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + durationMonths, 0);	
-		
-		const bookingData = {
-			username,	
-			studentName,
-			studentID,
-			startMonth: formatDateDMY(startDate),
-			endMonth: formatDateDMY(endDate),
-			duration: durationMonths,
-			garaj: null,	
-			status: 'Pending',
-			message: 'Menunggu kelulusan Admin'
-		};
-		
-		const available = await getAvailableGarage(bookingData.startMonth, bookingData.endMonth);
-		
-		if(available.length > 0) {
-			 bookingData.garaj = available[0];
-			 bookingData.status = 'Approved';
-			 bookingData.message = `Garaj ${available[0]} ditetapkan.`;
-		} else {
-			 bookingData.message = 'Tiada garaj tersedia dalam tempoh ini. Dalam barisan (Queue).';
-		}
-		
-		const newBookingRef = bookingsRef.push(bookingData);
-		await newBookingRef.update({ id: newBookingRef.key });
+        const { username, studentName, studentID, startMonth, duration, garaj } = req.body;
 
-		if (bookingData.status === 'Approved') {
-			return res.status(201).json({ success: true, message: `Tempahan diterima dan Garaj ${bookingData.garaj} ditetapkan secara automatik.` });
-		} else {
-			return res.status(201).json({ success: true, message: 'Tempahan berjaya dibuat. Menunggu kelulusan Admin (dalam barisan).' });
-		}
-		
-	} catch (error) {
-		console.error('Booking creation error:', error);
-		return res.status(500).json({ success: false, message: 'Ralat Server. Sila cuba lagi.' });
-	}
+        const garajNumber = toGarajNumber(garaj);
+
+        if (!studentName || !studentID || !startMonth || !duration || !username || !garajNumber) {
+                return res.status(400).json({ success: false, message: 'Sila isi semua ruangan termasuk pilihan garaj.' });
+        }
+
+        if (garajNumber < 1 || garajNumber > totalGaraj) {
+                return res.status(400).json({ success: false, message: 'Pilihan garaj tidak sah.' });
+        }
+
+        const durationMonths = parseInt(duration);
+
+        try {
+                const startDate = parseDMY(`01/${startMonth.substring(5, 7)}/${startMonth.substring(0, 4)}`);
+                const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + durationMonths, 0);
+
+                const newBookingRange = {
+                        start: startDate,
+                        end: endDate
+                };
+
+                const snapshot = await bookingsRef.once('value');
+                const bookings = snapshotToArray(snapshot);
+
+                const hasOverlap = bookings.some(b => {
+                        const existingGaraj = toGarajNumber(b.garaj);
+                        if (existingGaraj !== garajNumber) return false;
+                        if (['Cancelled', 'Rejected'].includes(b.status)) return false;
+                        if (!b.startMonth || !b.endMonth) return false;
+
+                        try {
+                                const bStart = parseDMY(b.startMonth);
+                                const bEnd = parseDMY(b.endMonth);
+                                const bCheckStart = new Date(bStart.getFullYear(), bStart.getMonth() + 1, 0);
+                                const bCheckEnd = new Date(bEnd.getFullYear(), bEnd.getMonth() + 1, 0);
+
+                                return newBookingRange.start <= bCheckEnd && newBookingRange.end >= bCheckStart;
+                        } catch (e) {
+                                return false;
+                        }
+                });
+
+                if (hasOverlap) {
+                        return res.status(400).json({ success: false, message: `Garaj ${formatGarageLabel(garajNumber)} sudah ditempah dalam tempoh ini.` });
+                }
+
+                const bookingData = {
+                        username,
+                        studentName,
+                        studentID,
+                        startMonth: formatDateDMY(startDate),
+                        endMonth: formatDateDMY(endDate),
+                        duration: durationMonths,
+                        garaj: garajNumber,
+                        status: 'Approved',
+                        message: `Tempahan disahkan untuk ${formatGarageLabel(garajNumber)}.`,
+                        zone: getGarageZone(garajNumber)
+                };
+
+                const newBookingRef = bookingsRef.push(bookingData);
+                await newBookingRef.update({ id: newBookingRef.key });
+
+                return res.status(201).json({ success: true, message: `Tempahan berjaya! ${formatGarageLabel(garajNumber)} dikunci untuk anda.` });
+
+        } catch (error) {
+                console.error('Booking creation error:', error);
+                return res.status(500).json({ success: false, message: 'Ralat Server. Sila cuba lagi.' });
+        }
 });
 
 // POST /bookings/:id/garaj (Admin: Assign garage)
@@ -492,10 +601,12 @@ app.post('/bookings/:id/extend', async (req, res) => {
 		
 		// Semak ketersediaan garaj yang SAMA untuk tempoh lanjutan
 		const allBookingsSnapshot = await bookingsRef.once('value');
-		const allBookings = snapshotToArray(allBookingsSnapshot).filter(b => b.id !== id && b.status === 'Approved');
-		
-		const isOverlap = allBookings.some(b => {
-			 if (!b.garaj || b.garaj !== booking.garaj) return false;
+                const allBookings = snapshotToArray(allBookingsSnapshot).filter(b => b.id !== id && b.status === 'Approved');
+
+                const isOverlap = allBookings.some(b => {
+                         const garajNum = toGarajNumber(b.garaj);
+                         const currentGarajNum = toGarajNumber(booking.garaj);
+                         if (!garajNum || garajNum !== currentGarajNum) return false;
 			 
 			 try {
 				// Tarikh tempahan sedia ada yang lain
@@ -585,9 +696,9 @@ app.get('/export/csv', async (req, res) => {
 // ✅ QUEUE CHECKER	
 // ===============================================
 async function checkQueue() {
-	try {
-		const snapshot = await bookingsRef.orderByChild('status').equalTo('Pending').once('value');
-		let pendingBookings = snapshotToArray(snapshot);
+        try {
+                const snapshot = await bookingsRef.orderByChild('status').equalTo('Pending').once('value');
+                let pendingBookings = snapshotToArray(snapshot);
 		
 		// Susun mengikut masa tempahan (atau ID) untuk FIFO (First In, First Out)
 		pendingBookings.sort((a, b) => a.id.localeCompare(b.id));	
@@ -612,6 +723,14 @@ async function checkQueue() {
 }
 // Jalankan semakan queue setiap 30 saat untuk menangani queue secara automatik
 setInterval(checkQueue, 30000);
+
+// ===============================================
+// ✅ GLOBAL ERROR HANDLER
+// ===============================================
+app.use((err, req, res, next) => {
+        console.error('Unhandled error:', err);
+        res.status(500).json({ success: false, message: 'Ralat pelayan. Sila cuba lagi.' });
+});
 
 // ===============================================
 // START SERVER
