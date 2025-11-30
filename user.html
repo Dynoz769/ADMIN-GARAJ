@@ -24,9 +24,22 @@
   <div class="layout-grid">
     <div>
       <h3>Status Garaj</h3>
+      <div class="board-controls">
+        <div class="legend">
+          <span class="legend-pill occupied-pill">Penuh</span>
+          <span class="legend-pill available-pill">Kosong</span>
+        </div>
+        <div class="control-actions">
+          <label class="toggle">
+            <input type="checkbox" id="autoRefresh" checked>
+            <span>Auto refresh 20s</span>
+          </label>
+          <button class="ghost" onclick="fetchGarajStatus(true)">Refresh</button>
+          <span class="timestamp" id="lastUpdated">Kemaskini: -</span>
+        </div>
+      </div>
       <div class="garaj-container" id="garajContainer"></div>
     </div>
-  </section>
 
     <div class="card form-card">
       <h3>Tempah Garaj</h3>
@@ -56,6 +69,7 @@ const zones = ['A','B','C','D'];
 let username = localStorage.getItem('username');
 let latestStatus = [];
 let selectedGarage = null;
+let refreshTimer = null;
 
 function getGarageZone(garaj){
   if (garaj <= garajPerZone) return 'A';
@@ -113,14 +127,24 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Sila login untuk mengakses dashboard pengguna.');
         window.location.href = 'login.html';
     }
+    const toggle = document.getElementById('autoRefresh');
+    toggle.addEventListener('change', (e) => setAutoRefresh(e.target.checked));
+    setAutoRefresh(true);
     fetchGarajStatus();
 });
 
 function logout() {
     localStorage.removeItem('username');
     localStorage.removeItem('role');
-    localStorage.removeItem('studentID'); 
+    localStorage.removeItem('studentID');
     window.location.href = 'login.html';
+}
+
+function setAutoRefresh(enabled){
+  if(refreshTimer) clearInterval(refreshTimer);
+  if(enabled){
+    refreshTimer = setInterval(() => fetchGarajStatus(), 20000);
+  }
 }
 
 // ===== BUAT TEMPAHAN =====
@@ -153,12 +177,18 @@ async function bookGarage(){
 }
 
 // ===== VISUAL STATUS GARAJ =====
-async function fetchGarajStatus(){
+async function fetchGarajStatus(isManual=false){
   const res = await fetch(`${api}/garaj-status`);
   const status = await res.json();
   latestStatus = status;
   const container = document.getElementById('garajContainer');
   container.innerHTML='';
+
+  const timestamp = document.getElementById('lastUpdated');
+  if(timestamp){
+    const now = new Date();
+    timestamp.textContent = `Kemaskini: ${now.toLocaleTimeString('ms-MY')}${isManual ? ' (Manual)' : ''}`;
+  }
 
   const grouped = groupGarajByZone(status);
   let activeZone = container.dataset.activeZone || zones[0];
