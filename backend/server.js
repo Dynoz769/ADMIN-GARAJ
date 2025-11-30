@@ -368,17 +368,6 @@ app.get('/bookings', async (req, res) => {
         }
 });
 
-// DELETE /bookings (Admin: Delete all bookings)
-app.delete('/bookings', async (req, res) => {
-        try {
-                await bookingsRef.remove();
-                return res.json({ success: true, message: 'Semua tempahan berjaya dipadam.' });
-        } catch (error) {
-                console.error('Delete all bookings error:', error);
-                return res.status(500).json({ success: false, message: 'Ralat Server. Gagal memadam semua tempahan.' });
-        }
-});
-
 // GET /user-bookings (User: Filter by studentID) — legacy support only
 app.get('/user-bookings', async (req, res) => {
         const { studentID } = req.query;

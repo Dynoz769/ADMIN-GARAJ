@@ -17,7 +17,6 @@
             </div>
             <div class="hero-actions">
                 <button onclick="exportCSV()">Export CSV</button>
-                <button class="danger" onclick="deleteAllData()">Padam Semua Data</button>
                 <button class="logout" onclick="logout()">Logout</button>
             </div>
         </section>
@@ -168,21 +167,6 @@
         localStorage.removeItem('username');
         localStorage.removeItem('role');
         window.location.href = 'login.html';
-    }
-
-    // Padam semua data tempahan
-    async function deleteAllData(){
-      if(!confirm('Adakah anda pasti mahu memadam SEMUA tempahan? Tindakan ini tidak boleh diundur.')) return;
-
-      try {
-        const res = await fetch(`${api}/bookings`, { method: 'DELETE' });
-        const data = await res.json();
-        alert(data.message || 'Semua data berjaya dipadam.');
-      } catch (error) {
-        alert('Gagal memadam semua data. Sila cuba lagi.');
-      }
-
-      fetchGarajStatus();
     }
 
     // ===== GARAGE STATUS VISUALS =====
