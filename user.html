@@ -83,6 +83,19 @@ let refreshTimer = null;
 let groupedCache = {};
 let filterStatus = 'all';
 let searchTerm = '';
+let boardError = '';
+
+function buildEmptyStatus(){
+  return Array.from({length: totalGaraj}, (_,i) => {
+    const garajNum = i + 1;
+    return {
+      garaj: garajNum,
+      zone: getGarageZone(garajNum),
+      label: formatGarageLabel(garajNum),
+      occupied: false
+    };
+  });
+}
 
 function getGarageZone(garaj){
   if (garaj <= garajPerZone) return 'A';
@@ -192,19 +205,30 @@ async function bookGarage(){
 
 // ===== VISUAL STATUS GARAJ =====
 async function fetchGarajStatus(isManual=false){
-  const res = await fetch(`${api}/garaj-status`);
-  const status = await res.json();
-  latestStatus = status;
-  groupedCache = groupGarajByZone(status);
-  syncSelection(status);
-  const container = document.getElementById('garajContainer');
-  container.innerHTML='';
+  try {
+    const res = await fetch(`${api}/garaj-status`);
+    const status = await res.json();
+    latestStatus = Array.isArray(status) ? status : [];
+    groupedCache = groupGarajByZone(latestStatus);
+    syncSelection(latestStatus);
+    boardError = '';
 
-  const timestamp = document.getElementById('lastUpdated');
-  if(timestamp){
-    const now = new Date();
-    timestamp.textContent = `Kemaskini: ${now.toLocaleTimeString('ms-MY')}${isManual ? ' (Manual)' : ''}`;
+    const timestamp = document.getElementById('lastUpdated');
+    if(timestamp){
+      const now = new Date();
+      timestamp.textContent = `Kemaskini: ${now.toLocaleTimeString('ms-MY')}${isManual ? ' (Manual)' : ''}`;
+    }
+  } catch (error) {
+    console.error('Gagal memuat status garaj', error);
+    if(!latestStatus || latestStatus.length === 0){
+      latestStatus = buildEmptyStatus();
+      groupedCache = groupGarajByZone(latestStatus);
+    }
+    boardError = 'Gagal memuat status terkini. Paparan menunjukkan data kosong.';
   }
+
+  const container = document.getElementById('garajContainer');
+  if(container) container.innerHTML='';
 
   renderBoard();
 }
@@ -213,6 +237,13 @@ function renderBoard(){
   const container = document.getElementById('garajContainer');
   if(!container) return;
   container.innerHTML='';
+
+  if(boardError){
+    const notice = document.createElement('div');
+    notice.className = 'board-error';
+    notice.textContent = boardError;
+    container.appendChild(notice);
+  }
 
   let activeZone = container.dataset.activeZone || zones[0];
   if(!zones.includes(activeZone)) activeZone = zones[0];
@@ -339,6 +370,15 @@ function updateFilterButtons(){
 
   section.appendChild(grid);
   target.appendChild(section);
+}
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
 }
 
 function syncSelection(status){
