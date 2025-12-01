@@ -82,10 +82,34 @@ admin.initializeApp({
 
 const db = admin.database();
 const bookingsRef = db.ref('bookings');
-const usersRef = db.ref('users'); 
+const usersRef = db.ref('users');
 
 const totalGaraj = 88;
 const garajPerZone = 22;
+
+let firebaseConnected = false;
+
+async function verifyFirebaseConnection(){
+        try {
+                await db.ref('.info/connected').once('value');
+                firebaseConnected = true;
+                console.log('Firebase RTDB berjaya dihubungi.');
+        } catch (error) {
+                firebaseConnected = false;
+                console.error('Tidak dapat menyambung ke Firebase RTDB:', error.message || error);
+        }
+}
+
+function assertDbReady(res){
+        if(!firebaseConnected){
+                res.status(503).json({ success: false, message: 'Pangkalan data tidak dapat dihubungi. Sila semak konfigurasi Firebase.' });
+                return false;
+        }
+        return true;
+}
+
+verifyFirebaseConnection();
+setInterval(verifyFirebaseConnection, 300000); // Semak setiap 5 minit
 
 function toGarajNumber(value){
         const num = parseInt(value, 10);
@@ -207,7 +231,7 @@ app.get('/health/firebase', async (req, res) => {
         try {
                 const offsetSnap = await db.ref('.info/serverTimeOffset').once('value');
                 const offset = offsetSnap.val() || 0;
-                res.status(200).json({ ok: true, offset });
+                res.status(200).json({ ok: true, offset, connected: firebaseConnected });
         } catch (error) {
                 console.error('Firebase healthcheck failed:', error);
                 res.status(500).json({ ok: false, message: 'Firebase tidak dapat dihubungi.' });
@@ -218,9 +242,10 @@ app.get('/health/firebase', async (req, res) => {
 // ✅ ANALYTICS ENDPOINT	
 // ===============================================
 app.get('/analytics', async (req, res) => {
-	try {
-		const snapshot = await bookingsRef.once('value');
-		const bookings = snapshotToArray(snapshot);
+        if(!assertDbReady(res)) return;
+        try {
+                const snapshot = await bookingsRef.once('value');
+                const bookings = snapshotToArray(snapshot);
 		
 		const stats = {
 			totalBookings: bookings.length,
@@ -273,15 +298,16 @@ app.get('/analytics', async (req, res) => {
 // ✅ LOGIN ENDPOINT	
 // ===============================================
 app.post('/login', async (req, res) => {
-	const { username, password } = req.body;
-	
-	if (!username || !password) {
-		return res.json({ success: false, message: 'Sila isi semua ruangan!' });
-	}
-	
-	try {
-		const snapshot = await usersRef.once('value');
-		const users = snapshotToArray(snapshot);
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+                return res.json({ success: false, message: 'Sila isi semua ruangan!' });
+        }
+
+        if(!assertDbReady(res)) return;
+        try {
+                const snapshot = await usersRef.once('value');
+                const users = snapshotToArray(snapshot);
 		const user = users.find(u => u.username === username && u.password === password);
 		
 		if (user) {
@@ -306,6 +332,7 @@ app.post('/login', async (req, res) => {
 // ✅ GARAJ STATUS ENDPOINT	
 // ===============================================
 app.get('/garaj-status', async (req, res) => {
+        if(!assertDbReady(res)) return;
         try {
                 const snapshot = await bookingsRef.once('value');
                 const bookings = snapshotToArray(snapshot).filter(b => b.garaj && !['Cancelled', 'Rejected'].includes(b.status));
@@ -359,6 +386,7 @@ app.get('/garaj-status', async (req, res) => {
 // GET /bookings (Admin: Filter & Search) — legacy support only
 app.get('/bookings', async (req, res) => {
         const { search, status } = req.query;
+        if(!assertDbReady(res)) return;
         try {
                 const snapshot = await bookingsRef.once('value');
                 let bookings = snapshotToArray(snapshot);
@@ -389,6 +417,7 @@ app.get('/user-bookings', async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Student ID diperlukan.' });
         }
 
+        if(!assertDbReady(res)) return;
         try {
                 const snapshot = await bookingsRef.once('value');
                 let bookings = snapshotToArray(snapshot);
@@ -406,6 +435,7 @@ app.get('/user-bookings', async (req, res) => {
 // GET /bookings/history/:username
 app.get('/bookings/history/:username', async (req, res) => {
         const { username } = req.params;
+        if(!assertDbReady(res)) return;
         try {
                 const snapshot = await bookingsRef.once('value');
                 let bookings = snapshotToArray(snapshot);
@@ -436,6 +466,7 @@ app.post('/bookings', async (req, res) => {
 
         const durationMonths = parseInt(duration);
 
+        if(!assertDbReady(res)) return;
         try {
                 const startDate = parseDMY(`01/${startMonth.substring(5, 7)}/${startMonth.substring(0, 4)}`);
                 const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + durationMonths, 0);
@@ -496,16 +527,17 @@ app.post('/bookings', async (req, res) => {
 
 // POST /bookings/:id/garaj (Admin: Assign garage)
 app.post('/bookings/:id/garaj', async (req, res) => {
-	const { id } = req.params;
-	const { garaj } = req.body;
+        const { id } = req.params;
+        const { garaj } = req.body;
 
-	if (!garaj) {
-		return res.status(400).json({ success: false, message: 'Nombor garaj diperlukan.' });
-	}
+        if (!garaj) {
+                return res.status(400).json({ success: false, message: 'Nombor garaj diperlukan.' });
+        }
 
-	try {
-		const snapshot = await bookingsRef.child(id).once('value');
-		const booking = snapshot.val();
+        if(!assertDbReady(res)) return;
+        try {
+                const snapshot = await bookingsRef.child(id).once('value');
+                const booking = snapshot.val();
 
 		if (!booking) {
 			return res.status(404).json({ success: false, message: 'Tempahan tidak ditemui.' });
@@ -534,12 +566,13 @@ app.post('/bookings/:id/garaj', async (req, res) => {
 
 // POST /bookings/:id/reject (Admin: Reject booking)
 app.post('/bookings/:id/reject', async (req, res) => {
-	const { id } = req.params;
-	const { message } = req.body;
-	
-	try {
-		const updateData = {
-			status: 'Rejected',
+        const { id } = req.params;
+        const { message } = req.body;
+
+        if(!assertDbReady(res)) return;
+        try {
+                const updateData = {
+                        status: 'Rejected',
 			message: message || 'Ditolak oleh Admin tanpa sebab spesifik.'
 		};
 		await bookingsRef.child(id).update(updateData);
@@ -552,11 +585,12 @@ app.post('/bookings/:id/reject', async (req, res) => {
 
 // POST /bookings/:id/cancel (User/Admin: Cancel booking)
 app.post('/bookings/:id/cancel', async (req, res) => {
-	const { id } = req.params;
-	
-	try {
-		const updateData = {
-			status: 'Cancelled',
+        const { id } = req.params;
+
+        if(!assertDbReady(res)) return;
+        try {
+                const updateData = {
+                        status: 'Cancelled',
 			message: 'Dibatalkan oleh Pengguna/Admin.',
 			garaj: null	
 		};
@@ -573,17 +607,18 @@ app.post('/bookings/:id/cancel', async (req, res) => {
 
 // POST /bookings/:id/extend (User/Admin: Extend booking)
 app.post('/bookings/:id/extend', async (req, res) => {
-	const { id } = req.params;
-	const { extra } = req.body;	
-	const extraMonths = parseInt(extra);
+        const { id } = req.params;
+        const { extra } = req.body;
+        const extraMonths = parseInt(extra);
 
-	if (isNaN(extraMonths) || extraMonths <= 0) {
-		return res.status(400).json({ success: false, message: 'Bilangan bulan tambahan tidak sah.' });
-	}
-	
-	try {
-		const snapshot = await bookingsRef.child(id).once('value');
-		const booking = snapshot.val();
+        if (isNaN(extraMonths) || extraMonths <= 0) {
+                return res.status(400).json({ success: false, message: 'Bilangan bulan tambahan tidak sah.' });
+        }
+
+        if(!assertDbReady(res)) return;
+        try {
+                const snapshot = await bookingsRef.child(id).once('value');
+                const booking = snapshot.val();
 		
 		if (!booking || booking.status !== 'Approved' || !booking.garaj) {
 			return res.status(400).json({ success: false, message: 'Hanya tempahan yang diluluskan dan ditetapkan garaj boleh dilanjutkan.' });
@@ -655,10 +690,11 @@ app.post('/bookings/:id/extend', async (req, res) => {
 
 // DELETE /bookings/:id (Admin: Delete booking)
 app.delete('/bookings/:id', async (req, res) => {
-	const { id } = req.params;
-	try {
-		await bookingsRef.child(id).remove();
-		checkQueue();	
+        const { id } = req.params;
+        if(!assertDbReady(res)) return;
+        try {
+                await bookingsRef.child(id).remove();
+                checkQueue();
 		return res.json({ success: true, message: `Tempahan ${id} berjaya dipadam.` });
 	} catch (error) {
 		console.error('Delete booking error:', error);
@@ -671,9 +707,10 @@ app.delete('/bookings/:id', async (req, res) => {
 // ✅ EXPORT CSV ENDPOINT	
 // ===============================================
 app.get('/export/csv', async (req, res) => {
-	try {
-		const snapshot = await bookingsRef.once('value');
-		const bookings = snapshotToArray(snapshot);
+        if(!assertDbReady(res)) return;
+        try {
+                const snapshot = await bookingsRef.once('value');
+                const bookings = snapshotToArray(snapshot);
 		
 		const headers = "ID Tempahan,Nama,No Matrik,Bulan Mula,Bulan Tamat,Tempoh,Garaj,Status,Mesej\n";
 		const rows = bookings.map(b =>	
@@ -696,6 +733,7 @@ app.get('/export/csv', async (req, res) => {
 // ✅ QUEUE CHECKER	
 // ===============================================
 async function checkQueue() {
+        if(!firebaseConnected) return;
         try {
                 const snapshot = await bookingsRef.orderByChild('status').equalTo('Pending').once('value');
                 let pendingBookings = snapshotToArray(snapshot);

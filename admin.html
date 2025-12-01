@@ -359,6 +359,26 @@
       target.appendChild(section);
     }
 
+    function setFilter(status){
+      filterStatus = status;
+      updateFilterButtons();
+      renderBoard();
+    }
+
+    function setSearch(value){
+      searchTerm = value || '';
+      renderBoard();
+    }
+
+    function updateFilterButtons(){
+      document.querySelectorAll('.filter-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filterStatus);
+      });
+
+      section.appendChild(grid);
+      target.appendChild(section);
+    }
+
     function exportCSV(){
         window.location.href = `${api}/export/csv`;
     }

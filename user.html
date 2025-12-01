@@ -518,6 +518,45 @@ function renderLastUpdated(timestamp){
   const date = new Date(ts);
   node.textContent = `Dikemas kini ${date.toLocaleString('ms-MY')}`;
 }
+
+function syncSelection(status){
+  if(!selectedGarage) return;
+  const current = status.find(g => g.garaj === selectedGarage.garaj || g.label === selectedGarage.label);
+  if(!current || current.occupied){
+    selectedGarage = null;
+    document.getElementById('selectedGarage').textContent = 'Tiada garaj dipilih';
+  }
+}
+
+function cacheStatus(data){
+  const payload = { updatedAt: Date.now(), data };
+  localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify(payload));
+  renderLastUpdated(payload.updatedAt);
+}
+
+function loadCachedStatus(){
+  try {
+    const raw = localStorage.getItem(STATUS_CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(parsed && Array.isArray(parsed.data)) return parsed;
+  } catch(e){
+    console.warn('Tidak dapat memuat cache status', e);
+  }
+  return null;
+}
+
+function renderLastUpdated(timestamp){
+  const node = document.getElementById('lastUpdated');
+  if(!node) return;
+  const ts = timestamp || JSON.parse(localStorage.getItem(STATUS_CACHE_KEY) || '{}').updatedAt;
+  if(!ts){
+    node.textContent = 'Menunggu status terkini...';
+    return;
+  }
+  const date = new Date(ts);
+  node.textContent = `Dikemas kini ${date.toLocaleString('ms-MY')}`;
+}
 </script>
 </body>
 </html>
